@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Models\Transaction;
 use App\Services\Transactions\TransactionReconciler;
 use Illuminate\Console\Command;
@@ -23,7 +24,9 @@ class PollPendingTransactions extends Command
         $open = Transaction::whereIn('status', [
             TransactionStatus::Pending->value,
             TransactionStatus::Processing->value,
-        ])->orderBy('created_at')->limit((int) $this->option('limit'))->get();
+        ])
+            ->where('type', '!=', TransactionType::CryptoDeposit->value) // crypto has its own poller
+            ->orderBy('created_at')->limit((int) $this->option('limit'))->get();
 
         $settled = 0;
 

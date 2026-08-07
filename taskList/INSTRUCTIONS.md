@@ -77,6 +77,46 @@ curl -s http://127.0.0.1:8000/v1/payouts \
 > With the fake provider, step 2 settles the collection to `succeeded`; with MTN
 > sandbox, the payer must approve the prompt first (or use MTN's test states).
 
+## Crypto deposits (stablecoin on-ramp)
+
+Configure a receiving address + watcher secret in `.env`:
+
+```
+PSP_CRYPTO_WATCHER_SECRET=some-long-secret
+CRYPTO_USDT_TRON_ADDRESS=TYourTronReceivingAddress
+```
+
+Create a deposit intent (amount in the asset's minor units — USDT has 6 decimals,
+so `1000000` = 1.00 USDT):
+
+```bash
+curl -s http://127.0.0.1:8000/v1/crypto/deposits \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"amount":1000000,"asset":"USDT","chain":"tron","reference":"dep-1"}'
+# -> 201 with data.crypto.address (where the payer sends funds) + memo + expiry
+```
+
+The **chain watcher** (a node/indexer you run) confirms the on-chain payment and
+POSTs to `/webhooks/crypto/{transaction_id}`, signing `"{ts}.{body}"` with
+`PSP_CRYPTO_WATCHER_SECRET`:
+
+```bash
+TXID=<the deposit id>;  SECRET=some-long-secret
+BODY='{"amount_received_minor":1000000,"confirmations":25,"tx_hash":"0xabc"}'
+TS=$(date +%s)
+SIG=$(printf '%s' "${TS}.${BODY}" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.*= //')
+curl -s -X POST http://127.0.0.1:8000/webhooks/crypto/$TXID \
+  -H "Content-Type: application/json" -H "X-Watcher-Signature: t=${TS},v1=${SIG}" -d "$BODY"
+# -> {"matched":true,"status":"succeeded"}; the merchant's USDT balance is credited net of fee
+```
+
+If a webhook is missed, `php artisan crypto:poll-deposits` reconciles it.
+
+> The watcher is out of scope here (it needs a chain node/indexer). Node integrates
+> it through this one signed webhook + the poll safety net. No FX to fiat in v1 —
+> the merchant holds a USDT balance, visible via `GET /v1/balance`.
+
 ## Onboard another merchant
 
 ```bash

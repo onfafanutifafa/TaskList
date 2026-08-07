@@ -69,10 +69,28 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
 - **Trap:** telling merchants to compare signatures without constant-time compare
   on their side; signing over a re-encoded body (sign the exact bytes sent).
 
-## 7. Reconciliation & ops (`app/Console/Commands/*`)
+## 7. Crypto deposits (`app/Providers/Crypto/*`, `Services/Transactions/CryptoDepositService.php`)
 
-- `psp:poll-pending` (scheduled every minute) settles transactions whose callback
-  was missed — the safety net that makes callbacks optional for correctness.
+- On-ramp: `POST /v1/crypto/deposits` reserves an address + creates a
+  `crypto_deposit` transaction (status `processing`, awaiting funds). Amount is in
+  the asset's minor units (USDT/USDC → 6 decimals).
+- A chain **watcher** (node/indexer, off-box) reports the on-chain payment to the
+  signed webhook `POST /webhooks/crypto/{reference}`; `CryptoWatcherCallbackController`
+  verifies HMAC + replay window, then `applyWatcherUpdate` settles if confirmed.
+  `crypto:poll-deposits` is the safety net.
+- Settlement reuses the reconciler + ledger: debit `crypto_float`, credit merchant
+  net of fee. Balance shows the asset alongside fiat (multi-currency `merchant_payable`).
+- **Add an asset/chain:** extend `config('psp.crypto.assets')` (address +
+  confirmations). **Add a real provider:** implement `CryptoProvider`, register it in
+  `CryptoProviderManager`, have `poll()` query a chain explorer.
+- **Traps:** settling from the payer's word (only the signed watcher/poll settles);
+  treating USDT as 2-decimal (it's 6); no FX to fiat yet — the merchant holds a USDT
+  balance, not GHS. Payouts are mobile-money only; there is no crypto withdrawal.
+
+## 8. Reconciliation & ops (`app/Console/Commands/*`)
+
+- `psp:poll-pending` (scheduled every minute) settles mobile-money transactions
+  whose callback was missed; `crypto:poll-deposits` does the same for crypto.
 - `webhooks:flush` retries failed deliveries.
 - `momo:provision-sandbox` mints MTN sandbox API user/key; `psp:create-merchant`
   onboards a merchant and prints a key once.
@@ -82,4 +100,7 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
 
 Multi-node payout concurrency uses a check-then-write guard, not row locks/reserved
 ledger entries; refunds/reversals; per-corridor pricing; card & bank rails; a
-merchant dashboard; queue-backed webhook sending. See [HANDOFF.md](HANDOFF.md).
+merchant dashboard; queue-backed webhook sending. **Crypto specifically:** no
+FX/settlement of a crypto balance into fiat, no crypto withdrawal, and address
+assignment is one-address-per-asset+memo (not a unique per-deposit HD address).
+See [HANDOFF.md](HANDOFF.md).

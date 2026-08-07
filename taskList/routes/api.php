@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\V1\BalanceController;
 use App\Http\Controllers\Api\V1\CollectionController;
+use App\Http\Controllers\Api\V1\CryptoDepositController;
 use App\Http\Controllers\Api\V1\PayoutController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Webhooks\CryptoWatcherCallbackController;
 use App\Http\Controllers\Webhooks\MtnMomoCallbackController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,10 +26,12 @@ Route::prefix('v1')->middleware('api.key')->group(function () {
     Route::middleware('idempotency')->group(function () {
         Route::post('collections', [CollectionController::class, 'store']);
         Route::post('payouts', [PayoutController::class, 'store']);
+        Route::post('crypto/deposits', [CryptoDepositController::class, 'store']);
     });
 
     Route::get('collections/{transaction}', [CollectionController::class, 'show']);
     Route::get('payouts/{transaction}', [PayoutController::class, 'show']);
+    Route::get('crypto/deposits/{transaction}', [CryptoDepositController::class, 'show']);
 });
 
 /*
@@ -41,3 +45,7 @@ Route::match(['post', 'put'], 'webhooks/mtn-momo/collection/{reference}', [MtnMo
     ->name('webhooks.mtn.collection');
 Route::match(['post', 'put'], 'webhooks/mtn-momo/disbursement/{reference}', [MtnMomoCallbackController::class, 'disbursement'])
     ->name('webhooks.mtn.disbursement');
+
+// Signed on-chain payment notifications from the crypto watcher.
+Route::post('webhooks/crypto/{reference}', CryptoWatcherCallbackController::class)
+    ->name('webhooks.crypto');

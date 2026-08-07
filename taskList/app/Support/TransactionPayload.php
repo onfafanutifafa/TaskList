@@ -10,7 +10,7 @@ final class TransactionPayload
     /** @return array<string,mixed> */
     public static function make(Transaction $transaction): array
     {
-        return [
+        $payload = [
             'id' => $transaction->id,
             'type' => $transaction->type->value,
             'status' => $transaction->status->value,
@@ -29,5 +29,23 @@ final class TransactionPayload
             'succeeded_at' => optional($transaction->succeeded_at)->toIso8601String(),
             'failed_at' => optional($transaction->failed_at)->toIso8601String(),
         ];
+
+        if ($transaction->relationLoaded('cryptoDeposit') && $transaction->cryptoDeposit) {
+            $d = $transaction->cryptoDeposit;
+            $payload['crypto'] = [
+                'asset' => $d->asset,
+                'chain' => $d->chain,
+                'address' => $d->address,
+                'memo' => $d->memo,
+                'amount_expected' => $d->amount_expected_minor,
+                'amount_received' => $d->amount_received_minor,
+                'confirmations' => $d->confirmations,
+                'required_confirmations' => $d->required_confirmations,
+                'tx_hash' => $d->tx_hash,
+                'expires_at' => optional($d->expires_at)->toIso8601String(),
+            ];
+        }
+
+        return $payload;
     }
 }

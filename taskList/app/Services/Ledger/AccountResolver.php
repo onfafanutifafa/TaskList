@@ -27,6 +27,12 @@ class AccountResolver
         return $this->system('momo_float', AccountType::Asset, "MoMo Float ({$currency})", $currency);
     }
 
+    /** Asset: stablecoins held in the platform's on-chain receiving wallets. */
+    public function cryptoFloat(string $asset): LedgerAccount
+    {
+        return $this->system('crypto_float', AccountType::Asset, "Crypto Float ({$asset})", $asset);
+    }
+
     /** Revenue: fees the PSP earns. */
     public function feeRevenue(string $currency): LedgerAccount
     {

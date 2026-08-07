@@ -5,6 +5,49 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-07 — Add crypto deposits (stablecoin on-ramp)
+
+**State:** On `feat/psp-core` (core already committed `9a97e3d`), crypto work not yet
+committed. `php artisan test` → **25 passed (69 assertions)** (+5 crypto). Live
+smoke test passed end-to-end.
+
+**Done (verified):**
+- **New rail: crypto deposits.** USDT/USDC (6-decimal) added as currencies/assets.
+  `TransactionType::CryptoDeposit`. Deposits credit the merchant's balance **in the
+  asset** — no FX to fiat (deliberate v1 scope).
+- **Provider abstraction** (`Providers/Crypto/*`): `CryptoProvider` interface +
+  DTOs, `WatcherCryptoProvider` (assigns configured address + memo, TTL),
+  `FakeCryptoProvider` (simulates on-chain funds), `CryptoProviderManager`
+  (singleton, `->fake()`), `DepositEvaluation` (row → ProviderResult).
+- **Ledger:** `crypto_float` asset account; `recordDepositSettlement` shares the
+  credit-settlement path with collections (debit float, credit merchant net, fee).
+  Merchant now holds multi-currency balances (GHS + USDT).
+- **Reconciler:** `apply()` gained a `crypto_deposit` branch; mobile `poll()` skips
+  crypto (crypto has `CryptoDepositService::poll` + `crypto:poll-deposits`).
+- **HTTP:** `POST/GET /v1/crypto/deposits`; signed inbound webhook
+  `POST /webhooks/crypto/{ref}` (HMAC-SHA256 over `"{ts}.{body}"` + 300s replay
+  window; payer untrusted, watcher trusted-but-verified).
+- **Migrations:** `transactions.msisdn` made nullable; `crypto_deposits` table.
+
+**Verified how:**
+- Tests: deposit intent + address, unsupported asset/chain 422, confirmed deposit
+  credits net of fee + ledger balanced, watcher webhook settles on valid signature,
+  rejects bad signature (no money moved).
+- Live: created a 1.00 USDT deposit → address returned; signed watcher webhook →
+  `succeeded`; bad signature → 401; merchant USDT balance = `985000` (0.985000),
+  ledger debits==credits==1_000_000. (Local `.env` smoke values, not real wallets.)
+
+**Next:**
+1. Commit crypto work on `feat/psp-core`; push; open PR to `main`.
+2. Build/point a real chain watcher (TRON/EVM node or indexer) at the webhook.
+3. Unique per-deposit HD addresses (xpub) instead of shared-address+memo.
+4. FX: settle a crypto balance into a fiat balance at a quoted rate; crypto payouts.
+
+**Blocked / not done (by design):** no crypto→fiat FX, no crypto withdrawal, shared
+receiving address (memo-disambiguated), watcher itself is off-box.
+
+---
+
 ## 2026-08-07 — Repurpose stock Laravel skeleton into a mobile-money PSP core
 
 **State:** On `main`, not yet committed/pushed. `php artisan test` → **20 passed

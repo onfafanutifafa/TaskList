@@ -7,12 +7,15 @@ repository. Read this before making changes.
 
 **Node** is a mobile-money **payment service provider (PSP)** for Africa: an
 API-first platform that lets merchants **collect** (pull) and **pay out** (push)
-money over mobile-money rails, with a **double-entry ledger** as the source of
-truth for every cedi/shilling that moves.
+money over mobile-money rails, plus **receive stablecoin deposits** — all with a
+**double-entry ledger** as the source of truth for every unit that moves.
 
 - **Stack:** PHP 8.4, **Laravel 12**, SQLite in dev/CI (Postgres in prod).
-- **First rail:** **MTN MoMo** (Collections + Disbursements), wired end-to-end
+- **Mobile-money rail:** **MTN MoMo** (Collections + Disbursements), wired end-to-end
   against the sandbox. Others (M-Pesa, Airtel) slot in behind the same interface.
+- **Crypto rail:** stablecoin deposits (USDT/USDC on TRON/EVM), confirmed by an
+  off-box chain watcher via a signed webhook. Credits the merchant's balance **in
+  the asset** — no FX to fiat yet (that's the next step).
 - **Surface:** JSON API under `routes/api.php` (`/v1/*`). No merchant UI yet.
 
 > Node is the software layer. Moving **real** money additionally requires a
@@ -55,6 +58,14 @@ truth for every cedi/shilling that moves.
    authenticated merchant. Cross-merchant access returns **404**, never 403
    (don't leak existence).
 
+9. **Crypto: the payer is untrusted, the watcher is trusted-but-verified.** A
+   crypto deposit only settles when the chain watcher reports it via the signed
+   webhook (HMAC-SHA256 over `"{ts}.{body}"`, replay window enforced) or the poll
+   safety net confirms it. Deposits settle through the SAME reconciler + ledger as
+   collections (a `crypto_deposit` credits like a collection, from `crypto_float`).
+   Money is still integer minor units — USDT/USDC carry **6 decimals**
+   (1_000_000 = 1.00), read `config('psp.currencies.minor_units')`.
+
 ## Architecture (where things live)
 
 ```
@@ -63,17 +74,23 @@ app/
   Support/TransactionPayload.php  one serialiser for API + webhooks
   Enums/                          TransactionType/Status, LedgerDirection, AccountType, ApiKeyMode
   Services/Ledger/                LedgerService, AccountResolver, JournalLeg   (double-entry)
-  Services/Transactions/          CollectionService, PayoutService, TransactionReconciler
+  Services/Transactions/          Collection/Payout/CryptoDeposit services, TransactionReconciler
   Services/Webhooks/              WebhookDispatcher (signed, retrying)
   Providers/MobileMoney/
     Contracts/                    MobileMoneyProvider + DTOs (MoneyRequest, ProviderResult, ProviderStatus)
     Mtn/MtnMomoProvider.php       real MTN MoMo driver (token cache, requesttopay, transfer, status)
     Fake/FakeProvider.php         in-memory driver for tests/local
     ProviderManager.php           resolves a driver from config (singleton)
+  Providers/Crypto/
+    Contracts/                    CryptoProvider + DTOs (CryptoDepositRequest, CryptoAddress)
+    Watcher/WatcherCryptoProvider.php  assigns addresses; relies on the watcher webhook
+    Fake/FakeCryptoProvider.php   simulates on-chain funds for tests
+    DepositEvaluation.php         deposit row -> ProviderResult (one "is it done?" truth)
+    CryptoProviderManager.php     resolves the crypto driver (singleton)
   Http/Middleware/                AuthenticateApiKey, EnforceIdempotency
-  Http/Controllers/Api/V1/        Collection, Payout, Transaction, Balance
-  Http/Controllers/Webhooks/      MtnMomoCallbackController
-config/psp.php                    currencies, fees, providers, networks, webhooks
+  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, Transaction, Balance
+  Http/Controllers/Webhooks/      MtnMomoCallbackController, CryptoWatcherCallbackController
+config/psp.php                    currencies, fees, providers, networks, crypto, webhooks
 routes/api.php                    the /v1 surface
 ```
 
@@ -82,14 +99,18 @@ routes/api.php                    the /v1 surface
 Accounts have a type with a normal balance:
 `asset`/`expense` → debit-normal; `liability`/`revenue` → credit-normal.
 
-- **Merchant balance** = a **liability** (`merchant_payable`) — money we owe them.
-- **MoMo float** = an **asset** (`momo_float`) — cash in the provider account.
+- **Merchant balance** = a **liability** (`merchant_payable`) — money we owe them
+  (one account per currency/asset, so a merchant can hold GHS *and* USDT).
+- **MoMo float** = an **asset** (`momo_float`); **crypto float** = an **asset**
+  (`crypto_float`) — stablecoins in our on-chain wallets.
 - **Fees** = **revenue** (`fee_revenue`).
 
 Settlement journals (must balance):
 
 - **Collection success:** debit `momo_float` (gross) · credit `merchant_payable`
   (net) · credit `fee_revenue` (fee).
+- **Crypto deposit confirmed:** debit `crypto_float` (gross) · credit
+  `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape as a collection.
 - **Payout success:** debit `merchant_payable` (amount+fee) · credit `momo_float`
   (amount) · credit `fee_revenue` (fee).
 

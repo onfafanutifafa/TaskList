@@ -1,12 +1,15 @@
 # Node — mobile-money PSP for Africa
 
 **Node** is an API-first **payment service provider** core: merchants **collect**
-(pull) and **pay out** (push) money over mobile-money rails, backed by a
-**double-entry ledger** that is the source of truth for every unit of money moved.
+(pull) and **pay out** (push) money over mobile-money rails, plus **receive
+stablecoin deposits**, backed by a **double-entry ledger** that is the source of
+truth for every unit of money moved.
 
 - **Stack:** PHP 8.4 · Laravel 12 · SQLite (dev) / Postgres (prod)
-- **First rail:** MTN MoMo (Collections + Disbursements), sandbox-wired, behind a
+- **Mobile money:** MTN MoMo (Collections + Disbursements), sandbox-wired, behind a
   provider interface so M-Pesa / Airtel slot in later.
+- **Crypto:** USDT/USDC deposits on TRON/EVM, confirmed by a chain watcher via a
+  signed webhook; credits the merchant's balance in the asset (no FX to fiat yet).
 
 > Node is the software layer. Moving **real** money also needs per-country
 > licensing, PCI/KYC/AML, and live provider contracts — build/test on sandboxes.
@@ -41,9 +44,12 @@ Then follow the curl walkthrough in **[INSTRUCTIONS.md](INSTRUCTIONS.md)**.
 |---|---|---|
 | POST | `/v1/collections` | initiate a mobile-money pull |
 | POST | `/v1/payouts` | initiate a disbursement (balance-checked) |
+| POST | `/v1/crypto/deposits` | create a stablecoin deposit intent (returns an address) |
+| GET | `/v1/crypto/deposits/{id}` | fetch a deposit + on-chain status |
 | GET | `/v1/transactions` · `/v1/transactions/{id}` | list / fetch |
-| GET | `/v1/balance` | settled + available balance per currency |
-| POST/PUT | `/webhooks/mtn-momo/{product}/{ref}` | provider callback (re-verified via poll) |
+| GET | `/v1/balance` | settled + available balance per currency/asset |
+| POST/PUT | `/webhooks/mtn-momo/{product}/{ref}` | MoMo callback (re-verified via poll) |
+| POST | `/webhooks/crypto/{ref}` | signed chain-watcher deposit notification |
 
 ---
 

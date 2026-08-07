@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Transaction extends Model
 {
@@ -43,6 +44,11 @@ class Transaction extends Model
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(LedgerEntry::class);
+    }
+
+    public function cryptoDeposit(): HasOne
+    {
+        return $this->hasOne(CryptoDeposit::class);
     }
 
     public function amount(): Money

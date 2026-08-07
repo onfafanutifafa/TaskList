@@ -26,10 +26,13 @@ class TransactionReconciler
         private readonly WebhookDispatcher $webhooks,
     ) {}
 
-    /** Ask the provider for the current status and apply it. */
+    /**
+     * Ask the mobile-money provider for the current status and apply it.
+     * Crypto deposits reconcile through CryptoDepositService, not here.
+     */
     public function poll(Transaction $transaction): Transaction
     {
-        if ($transaction->status->isTerminal()) {
+        if ($transaction->status->isTerminal() || $transaction->type === TransactionType::CryptoDeposit) {
             return $transaction;
         }
 
@@ -59,9 +62,11 @@ class TransactionReconciler
 
         return DB::transaction(function () use ($transaction, $result) {
             if ($result->status === ProviderStatus::Successful) {
-                $transaction->type === TransactionType::Collection
-                    ? $this->ledger->recordCollectionSettlement($transaction)
-                    : $this->ledger->recordPayoutSettlement($transaction);
+                match ($transaction->type) {
+                    TransactionType::Collection => $this->ledger->recordCollectionSettlement($transaction),
+                    TransactionType::CryptoDeposit => $this->ledger->recordDepositSettlement($transaction),
+                    TransactionType::Payout => $this->ledger->recordPayoutSettlement($transaction),
+                };
 
                 $transaction->update([
                     'status' => TransactionStatus::Succeeded,

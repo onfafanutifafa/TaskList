@@ -14,12 +14,14 @@ return [
     | to the number of minor units per major unit.
     */
     'currencies' => [
-        'supported' => ['GHS', 'KES', 'UGX', 'EUR'],
+        'supported' => ['GHS', 'KES', 'UGX', 'EUR', 'USDT', 'USDC'],
         'minor_units' => [
             'GHS' => 100,
             'KES' => 100,
-            'UGX' => 1,     // Ugandan shilling has no subdivision in practice
-            'EUR' => 100,   // MTN sandbox settles in EUR
+            'UGX' => 1,         // Ugandan shilling has no subdivision in practice
+            'EUR' => 100,       // MTN sandbox settles in EUR
+            'USDT' => 1000000,  // stablecoins carry 6 decimals on TRON/EVM
+            'USDC' => 1000000,
         ],
         'default' => env('PSP_DEFAULT_CURRENCY', 'GHS'),
     ],
@@ -72,6 +74,46 @@ return [
             ],
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Crypto deposits (stablecoin on-ramp)
+    |--------------------------------------------------------------------------
+    | Merchants receive stablecoins to a per-deposit address; an off-box chain
+    | watcher (a node/indexer) confirms the on-chain payment and calls our signed
+    | webhook. Confirmed deposits credit the merchant's balance in the asset (no
+    | FX to fiat in v1). `assets` maps an asset to the chains we accept it on and
+    | how many confirmations are required before we settle.
+    */
+    'crypto' => [
+        'default_provider' => env('PSP_CRYPTO_PROVIDER', 'watcher'),
+        'deposit_ttl_minutes' => (int) env('PSP_CRYPTO_DEPOSIT_TTL', 60),
+
+        // Shared secret the chain watcher signs its callbacks with (HMAC-SHA256).
+        'watcher_secret' => env('PSP_CRYPTO_WATCHER_SECRET'),
+
+        'assets' => [
+            'USDT' => [
+                'tron' => [
+                    'confirmations' => (int) env('CRYPTO_USDT_TRON_CONFIRMATIONS', 20),
+                    // Receiving address the watcher funds/monitors. A production
+                    // build derives a unique address per deposit from an xpub; here
+                    // one address + a per-deposit memo/tag disambiguates payments.
+                    'address' => env('CRYPTO_USDT_TRON_ADDRESS'),
+                ],
+                'ethereum' => [
+                    'confirmations' => (int) env('CRYPTO_USDT_ETH_CONFIRMATIONS', 12),
+                    'address' => env('CRYPTO_USDT_ETH_ADDRESS'),
+                ],
+            ],
+            'USDC' => [
+                'base' => [
+                    'confirmations' => (int) env('CRYPTO_USDC_BASE_CONFIRMATIONS', 12),
+                    'address' => env('CRYPTO_USDC_BASE_ADDRESS'),
+                ],
+            ],
+        ],
     ],
 
     /*

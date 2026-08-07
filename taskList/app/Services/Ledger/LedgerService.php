@@ -92,6 +92,30 @@ class LedgerService
      */
     public function recordCollectionSettlement(Transaction $transaction): void
     {
+        $this->recordCreditSettlement(
+            $transaction,
+            $this->accounts->momoFloat($transaction->currency),
+            "Collection {$transaction->reference}",
+        );
+    }
+
+    /**
+     * Settle a confirmed crypto deposit: stablecoins land in the crypto float,
+     * the merchant is credited net of fee. Same shape as a collection, different
+     * float account. Idempotent per transaction.
+     */
+    public function recordDepositSettlement(Transaction $transaction): void
+    {
+        $this->recordCreditSettlement(
+            $transaction,
+            $this->accounts->cryptoFloat($transaction->currency),
+            "Crypto deposit {$transaction->reference}",
+        );
+    }
+
+    /** Shared pay-in posting: debit a float asset, credit the merchant net, book the fee. */
+    private function recordCreditSettlement(Transaction $transaction, LedgerAccount $float, string $narration): void
+    {
         if ($this->alreadyPosted($transaction)) {
             return;
         }
@@ -101,7 +125,7 @@ class LedgerService
         $net = $gross->subtract($fee);
 
         $legs = [
-            JournalLeg::debit($this->accounts->momoFloat($gross->currency), $gross),
+            JournalLeg::debit($float, $gross),
             JournalLeg::credit($this->accounts->merchantPayable($transaction->merchant, $net->currency), $net),
         ];
 
@@ -109,7 +133,7 @@ class LedgerService
             $legs[] = JournalLeg::credit($this->accounts->feeRevenue($fee->currency), $fee);
         }
 
-        $this->post($legs, $transaction, "Collection {$transaction->reference}");
+        $this->post($legs, $transaction, $narration);
     }
 
     /**
