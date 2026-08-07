@@ -5,6 +5,41 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-07 — Virtual USD/GBP/EUR receiving accounts
+
+**State:** On `feat/psp-core` (PR #3 → main). `php artisan test` → **39 passed
+(118 assertions)**. Live smoke test passed.
+
+**Done (verified):**
+- **Virtual foreign-currency accounts** (grey.co-style inbound). `POST /v1/virtual-
+  accounts` opens a USD/GBP/EUR account (one per currency per merchant); `GET` list/show.
+  Coordinates (account no., ABA routing / UK sort code / IBAN, SWIFT) issued by a
+  BaaS provider abstraction.
+- **Banking provider layer** (`Providers/Banking/*`): `VirtualAccountProvider` +
+  DTOs, `BaasVirtualAccountProvider` (deterministic stub for a real BaaS API),
+  `FakeBankingProvider`, `BankingProviderManager` (singleton, `->fake()`).
+- **Incoming payments** via signed webhook `POST /webhooks/banking/{account}`
+  (HMAC-SHA256 over `"{ts}.{body}"` + replay window). Creates a `bank_deposit`
+  transaction and settles it through the shared reconciler/ledger (debit `bank_float`,
+  credit merchant net of fee). Idempotent on the partner's `payment_reference`.
+- Added `USD`/`GBP` currencies; `TransactionType::BankDeposit`; `bank_float` account;
+  `recordBankDepositSettlement`; `virtual_accounts` table + model; scopes
+  `virtual_accounts:read/write`.
+
+**Verified how:** +5 tests (open account, re-open returns same, incoming payment
+credits net of fee, duplicate webhook no double-credit, bad signature rejected).
+Live: opened a USD account (real account #/ABA/SWIFT); signed webhook → `succeeded`,
+merchant USD balance = 98500 ($985.00 net of 1.5% fee). Full suite 39 green.
+
+**Next:** merge PR #3; real BaaS partner (account issuance + inbound settlement);
+FX pair so a USD/GBP/EUR balance converts to local for MoMo payout (corridor now
+complete end-to-end once rates cover these pairs).
+
+**Blocked / not done (by design):** BaaS partner is stubbed (real issuance needs a
+licensed bank); no outbound foreign-currency payout; balance guard still check-then-write.
+
+---
+
 ## 2026-08-07 — Grey-style FX corridor + security hardening + security review
 
 **State:** On `feat/psp-core` (PR #3 → main). Core + crypto already pushed; this

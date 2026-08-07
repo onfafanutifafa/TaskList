@@ -33,6 +33,12 @@ class AccountResolver
         return $this->system('crypto_float', AccountType::Asset, "Crypto Float ({$asset})", $asset);
     }
 
+    /** Asset: fiat held in the platform's BaaS virtual-account balances. */
+    public function bankFloat(string $currency): LedgerAccount
+    {
+        return $this->system('bank_float', AccountType::Asset, "Bank Float ({$currency})", $currency);
+    }
+
     /** Revenue: fees the PSP earns. */
     public function feeRevenue(string $currency): LedgerAccount
     {

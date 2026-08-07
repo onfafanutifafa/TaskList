@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\V1\CryptoDepositController;
 use App\Http\Controllers\Api\V1\FxController;
 use App\Http\Controllers\Api\V1\PayoutController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Api\V1\VirtualAccountController;
+use App\Http\Controllers\Webhooks\BankingCallbackController;
 use App\Http\Controllers\Webhooks\CryptoWatcherCallbackController;
 use App\Http\Controllers\Webhooks\MtnMomoCallbackController;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +29,10 @@ Route::prefix('v1')->middleware(['api.key', 'throttle:api'])->group(function () 
     Route::get('transactions/{transaction}', [TransactionController::class, 'show'])->middleware('ability:transactions:read');
 
     Route::post('fx/quote', [FxController::class, 'quote'])->middleware('ability:fx:read');
+
+    Route::post('virtual-accounts', [VirtualAccountController::class, 'store'])->middleware('ability:virtual_accounts:write');
+    Route::get('virtual-accounts', [VirtualAccountController::class, 'index'])->middleware('ability:virtual_accounts:read');
+    Route::get('virtual-accounts/{virtualAccount}', [VirtualAccountController::class, 'show'])->middleware('ability:virtual_accounts:read');
 
     Route::middleware('idempotency')->group(function () {
         Route::post('collections', [CollectionController::class, 'store'])->middleware('ability:collections:write');
@@ -55,4 +61,7 @@ Route::middleware('throttle:webhooks')->group(function () {
 
     Route::post('webhooks/crypto/{reference}', CryptoWatcherCallbackController::class)
         ->name('webhooks.crypto');
+
+    Route::post('webhooks/banking/{account}', BankingCallbackController::class)
+        ->name('webhooks.banking');
 });

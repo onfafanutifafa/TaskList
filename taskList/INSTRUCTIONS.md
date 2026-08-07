@@ -117,6 +117,35 @@ If a webhook is missed, `php artisan crypto:poll-deposits` reconciles it.
 > it through this one signed webhook + the poll safety net. No FX to fiat in v1 —
 > the merchant holds a USDT balance, visible via `GET /v1/balance`.
 
+## Virtual USD/GBP/EUR receiving accounts
+
+Open a virtual foreign-currency account; the response holds the coordinates a
+sender abroad would pay into:
+
+```bash
+curl -s http://127.0.0.1:8000/v1/virtual-accounts \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"currency":"USD"}'
+# -> 201 { account_number, routing_number (USD) / sort_code (GBP) / iban (EUR), swift_bic, bank_name }
+```
+
+Incoming international payments are reported by the banking partner to
+`/webhooks/banking/{account_id}`, signed with `PSP_BANKING_WEBHOOK_SECRET`:
+
+```bash
+ACCT=<account id>;  SECRET=<PSP_BANKING_WEBHOOK_SECRET>
+BODY='{"amount_minor":100000,"currency":"USD","payment_reference":"wire-1","sender_name":"Acme"}'
+TS=$(date +%s)
+SIG=$(printf '%s' "${TS}.${BODY}" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.*= //')
+curl -s -X POST http://127.0.0.1:8000/webhooks/banking/$ACCT \
+  -H "Content-Type: application/json" -H "X-Banking-Signature: t=${TS},v1=${SIG}" -d "$BODY"
+# -> {"matched":true,"status":"succeeded"}; merchant USD balance credited net of fee
+```
+
+> The BaaS partner is out of scope here (real account issuance + inbound settlement
+> need a licensed bank/BaaS). Node integrates it via account issuance + this one
+> signed webhook, idempotent on `payment_reference`.
+
 ## FX conversion (grey.co-style corridor)
 
 Convert one wallet balance into another. Quote first (no side effects), then execute:
@@ -141,7 +170,8 @@ Rates live in `config/psp.php` (`psp.fx.rates`); `PSP_FX_SPREAD_BPS` is the mark
 
 Every `/v1` route requires a scope. A key with no scopes set has full access; a
 restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read`,
-`crypto:write/read`, `fx:write/read`, `transactions:read`, `balances:read`.
+`crypto:write/read`, `virtual_accounts:write/read`, `fx:write/read`,
+`transactions:read`, `balances:read`.
 
 ```php
 // tinker: issue a read-only key

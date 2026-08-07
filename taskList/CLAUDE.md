@@ -16,9 +16,12 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
 - **Crypto rail:** stablecoin deposits (USDT/USDC on TRON/EVM), confirmed by an
   off-box chain watcher via a signed webhook. Credits the merchant's balance **in
   the asset**.
-- **FX:** merchants convert one wallet balance into another (e.g. USDT → GHS) at a
-  quoted rate with a spread. This completes the corridor: receive USDT → convert to
-  GHS → pay out to MTN MoMo (a grey.co-style flow).
+- **Virtual accounts:** merchants get virtual USD/GBP/EUR receiving accounts (issued
+  by a banking-as-a-service partner); incoming international payments credit the
+  balance via a signed BaaS webhook.
+- **FX:** merchants convert one wallet balance into another (e.g. USD → GHS) at a
+  quoted rate with a spread. Together these are the grey.co-style flow: receive
+  foreign currency (bank or stablecoin) → convert to local → pay out to MTN MoMo.
 - **Surface:** JSON API under `routes/api.php` (`/v1/*`), scoped API keys,
   per-key rate limiting. No merchant UI yet.
 
@@ -69,13 +72,14 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
     retry works and never double-processes. FX conversions post **two** balanced
     single-currency journals joined by `fx_clearing` (a journal can't span currencies).
 
-9. **Crypto: the payer is untrusted, the watcher is trusted-but-verified.** A
-   crypto deposit only settles when the chain watcher reports it via the signed
-   webhook (HMAC-SHA256 over `"{ts}.{body}"`, replay window enforced) or the poll
-   safety net confirms it. Deposits settle through the SAME reconciler + ledger as
-   collections (a `crypto_deposit` credits like a collection, from `crypto_float`).
-   Money is still integer minor units — USDT/USDC carry **6 decimals**
-   (1_000_000 = 1.00), read `config('psp.currencies.minor_units')`.
+9. **Inbound-partner webhooks are trusted-but-verified; the payer never is.** A
+   crypto deposit (chain watcher) and a bank deposit (BaaS partner) only settle
+   after an HMAC-SHA256 check over `"{ts}.{body}"` with a replay window — and are
+   idempotent on the provider's payment reference so a re-delivery never double-
+   credits. All pay-ins settle through the SAME reconciler + ledger (`crypto_deposit`
+   from `crypto_float`, `bank_deposit` from `bank_float`, both crediting the merchant
+   net of fee — like a collection). Money is integer minor units; USDT/USDC carry
+   **6 decimals** (1_000_000 = 1.00) — read `config('psp.currencies.minor_units')`.
 
 ## Architecture (where things live)
 
@@ -99,9 +103,14 @@ app/
     Fake/FakeCryptoProvider.php   simulates on-chain funds for tests
     DepositEvaluation.php         deposit row -> ProviderResult (one "is it done?" truth)
     CryptoProviderManager.php     resolves the crypto driver (singleton)
+  Providers/Banking/
+    Contracts/                    VirtualAccountProvider + DTOs
+    Baas/BaasVirtualAccountProvider.php  issues virtual USD/GBP/EUR account coordinates
+    Fake/FakeBankingProvider.php  test double
+    BankingProviderManager.php    resolves the banking driver (singleton)
   Http/Middleware/                AuthenticateApiKey, EnforceIdempotency, RequireAbility, SecurityHeaders
-  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, Fx, Transaction, Balance
-  Http/Controllers/Webhooks/      MtnMomoCallbackController, CryptoWatcherCallbackController
+  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, VirtualAccount, Fx, Transaction, Balance
+  Http/Controllers/Webhooks/      MtnMomo, CryptoWatcher, Banking callback controllers
 config/psp.php                    currencies, fees, providers, networks, crypto, webhooks
 routes/api.php                    the /v1 surface
 ```
@@ -123,6 +132,8 @@ Settlement journals (must balance):
   (net) · credit `fee_revenue` (fee).
 - **Crypto deposit confirmed:** debit `crypto_float` (gross) · credit
   `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape as a collection.
+- **Bank deposit (virtual account):** debit `bank_float` (gross) · credit
+  `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape, different float.
 - **Payout success:** debit `merchant_payable` (amount+fee) · credit `momo_float`
   (amount) · credit `fee_revenue` (fee).
 - **FX conversion (two journals):** *source* — debit `merchant_payable(from)` ·

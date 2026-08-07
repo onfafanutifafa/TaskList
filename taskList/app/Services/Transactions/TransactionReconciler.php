@@ -65,6 +65,7 @@ class TransactionReconciler
                 match ($transaction->type) {
                     TransactionType::Collection => $this->ledger->recordCollectionSettlement($transaction),
                     TransactionType::CryptoDeposit => $this->ledger->recordDepositSettlement($transaction),
+                    TransactionType::BankDeposit => $this->ledger->recordBankDepositSettlement($transaction),
                     TransactionType::Payout => $this->ledger->recordPayoutSettlement($transaction),
                 };
 

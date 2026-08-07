@@ -87,6 +87,22 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   treating USDT as 2-decimal (it's 6); no FX to fiat yet — the merchant holds a USDT
   balance, not GHS. Payouts are mobile-money only; there is no crypto withdrawal.
 
+## 7b. Virtual accounts (`app/Providers/Banking/*`, `Services/Transactions/VirtualAccountService.php`)
+
+- `POST /v1/virtual-accounts` opens a virtual USD/GBP/EUR receiving account (one per
+  currency per merchant; re-opening returns the same one). `GET` to list/show.
+  Coordinates (account no., routing/sort/IBAN, SWIFT) come from the BaaS provider.
+- Incoming payments arrive via the signed **banking webhook**
+  `POST /webhooks/banking/{account}` (HMAC-SHA256 + replay window); they create a
+  `bank_deposit` transaction and settle immediately (debit `bank_float`, credit
+  merchant net of fee). Idempotent on the partner's `payment_reference`.
+- **Add a currency/rail:** extend `config('psp.banking.currencies'|'rails')` and the
+  BaaS driver's `match`. **Real BaaS:** implement `VirtualAccountProvider` and register
+  it in `BankingProviderManager`.
+- **Traps:** trusting the payer instead of the signed partner; double-crediting a
+  re-delivered webhook (guard on `payment_reference`); currency mismatch between the
+  payload and the account.
+
 ## 8. FX conversion (`app/Services/Fx/*`)
 
 - `POST /v1/fx/quote` (read-only) returns rate + spread + net; `POST /v1/fx/conversions`

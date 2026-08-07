@@ -39,6 +39,11 @@ class Merchant extends Model
         return $this->hasMany(Conversion::class);
     }
 
+    public function virtualAccounts(): HasMany
+    {
+        return $this->hasMany(VirtualAccount::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

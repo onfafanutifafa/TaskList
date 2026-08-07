@@ -14,12 +14,14 @@ return [
     | to the number of minor units per major unit.
     */
     'currencies' => [
-        'supported' => ['GHS', 'KES', 'UGX', 'EUR', 'USDT', 'USDC'],
+        'supported' => ['GHS', 'KES', 'UGX', 'EUR', 'USD', 'GBP', 'USDT', 'USDC'],
         'minor_units' => [
             'GHS' => 100,
             'KES' => 100,
             'UGX' => 1,         // Ugandan shilling has no subdivision in practice
             'EUR' => 100,       // MTN sandbox settles in EUR
+            'USD' => 100,       // virtual USD receiving accounts
+            'GBP' => 100,
             'USDT' => 1000000,  // stablecoins carry 6 decimals on TRON/EVM
             'USDC' => 1000000,
         ],
@@ -94,6 +96,8 @@ return [
             'USDT:GHS' => env('FX_USDT_GHS', '15.20'),
             'USDC:GHS' => env('FX_USDC_GHS', '15.20'),
             'USDT:KES' => env('FX_USDT_KES', '129.00'),
+            'USD:GHS' => env('FX_USD_GHS', '15.10'),
+            'GBP:GHS' => env('FX_GBP_GHS', '19.30'),
             'EUR:GHS' => env('FX_EUR_GHS', '16.50'),
         ],
     ],
@@ -135,6 +139,26 @@ return [
                     'address' => env('CRYPTO_USDC_BASE_ADDRESS'),
                 ],
             ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Virtual receiving accounts (foreign-currency on-ramp)
+    |--------------------------------------------------------------------------
+    | A merchant gets a virtual USD/GBP/EUR bank account (issued by a banking-as-a-
+    | service partner). Incoming international payments are reported by the BaaS via
+    | a signed webhook and credit the merchant's balance in that currency. The
+    | `rails` block is display/metadata per currency.
+    */
+    'banking' => [
+        'provider' => env('PSP_BANKING_PROVIDER', 'baas'),
+        'webhook_secret' => env('PSP_BANKING_WEBHOOK_SECRET'),
+        'currencies' => ['USD', 'GBP', 'EUR'],
+        'rails' => [
+            'USD' => ['rail' => 'ach', 'bank_name' => env('BANK_USD_NAME', 'Node Bank USA')],
+            'GBP' => ['rail' => 'faster_payments', 'bank_name' => env('BANK_GBP_NAME', 'Node Bank UK')],
+            'EUR' => ['rail' => 'sepa', 'bank_name' => env('BANK_EUR_NAME', 'Node Bank EU')],
         ],
     ],
 

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Providers\Banking\BankingProviderManager;
 use App\Providers\Crypto\CryptoProviderManager;
 use App\Providers\MobileMoney\ProviderManager;
 use App\Services\Fx\RateProviderManager;
@@ -20,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ProviderManager::class);
         $this->app->singleton(CryptoProviderManager::class);
         $this->app->singleton(RateProviderManager::class);
+        $this->app->singleton(BankingProviderManager::class);
     }
 
     public function boot(): void

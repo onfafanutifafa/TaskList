@@ -113,6 +113,19 @@ class LedgerService
         );
     }
 
+    /**
+     * Settle an incoming payment to a virtual bank account: fiat lands in the bank
+     * float, the merchant is credited net of fee. Idempotent per transaction.
+     */
+    public function recordBankDepositSettlement(Transaction $transaction): void
+    {
+        $this->recordCreditSettlement(
+            $transaction,
+            $this->accounts->bankFloat($transaction->currency),
+            "Bank deposit {$transaction->reference}",
+        );
+    }
+
     /** Shared pay-in posting: debit a float asset, credit the merchant net, book the fee. */
     private function recordCreditSettlement(Transaction $transaction, LedgerAccount $float, string $narration): void
     {
