@@ -39,6 +39,22 @@ class AccountResolver
         return $this->system('fee_revenue', AccountType::Revenue, "Fee Revenue ({$currency})", $currency);
     }
 
+    /** Revenue: the FX spread the PSP earns on conversions. */
+    public function fxRevenue(string $currency): LedgerAccount
+    {
+        return $this->system('fx_revenue', AccountType::Revenue, "FX Revenue ({$currency})", $currency);
+    }
+
+    /**
+     * Suspense/position account for one side of a currency conversion. Because a
+     * balanced journal is single-currency, a conversion posts two journals that
+     * meet here; the per-currency balances are the platform's live FX position.
+     */
+    public function fxClearing(string $currency): LedgerAccount
+    {
+        return $this->system('fx_clearing', AccountType::Asset, "FX Clearing ({$currency})", $currency);
+    }
+
     /** Expense: provider costs / write-offs. */
     public function providerExpense(string $currency): LedgerAccount
     {

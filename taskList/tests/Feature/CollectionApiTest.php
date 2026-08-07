@@ -127,6 +127,19 @@ class CollectionApiTest extends TestCase
         $this->assertDatabaseCount('transactions', 1);
     }
 
+    public function test_a_failed_request_releases_the_idempotency_key_for_retry(): void
+    {
+        [, $headers] = $this->auth();
+        $headers['Idempotency-Key'] = 'retry-1';
+
+        // First attempt fails validation (thrown mid-request) -> lock must release.
+        $this->postJson('/v1/collections', $this->payload(['amount' => 0]), $headers)->assertStatus(422);
+
+        // Same key, now a valid body -> must succeed, not return a stuck 409.
+        $this->postJson('/v1/collections', $this->payload(), $headers)->assertStatus(201);
+        $this->assertDatabaseCount('transactions', 1);
+    }
+
     public function test_reused_idempotency_key_with_different_body_is_rejected(): void
     {
         [, $headers] = $this->auth();

@@ -117,6 +117,39 @@ If a webhook is missed, `php artisan crypto:poll-deposits` reconciles it.
 > it through this one signed webhook + the poll safety net. No FX to fiat in v1 —
 > the merchant holds a USDT balance, visible via `GET /v1/balance`.
 
+## FX conversion (grey.co-style corridor)
+
+Convert one wallet balance into another. Quote first (no side effects), then execute:
+
+```bash
+# Quote 10 USDT -> GHS (amount in source minor units: 10 USDT = 10_000_000)
+curl -s http://127.0.0.1:8000/v1/fx/quote \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"amount":10000000,"from":"USDT","to":"GHS"}'
+
+# Execute it
+curl -s http://127.0.0.1:8000/v1/fx/conversions \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"amount":10000000,"from":"USDT","to":"GHS","reference":"conv-1"}'
+```
+
+Full corridor: **crypto deposit (USDT) → `fx/conversions` (USDT→GHS) → `payouts` (MTN MoMo)**.
+Rates live in `config/psp.php` (`psp.fx.rates`); `PSP_FX_SPREAD_BPS` is the markup.
+
+## API-key scopes (least privilege)
+
+Every `/v1` route requires a scope. A key with no scopes set has full access; a
+restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read`,
+`crypto:write/read`, `fx:write/read`, `transactions:read`, `balances:read`.
+
+```php
+// tinker: issue a read-only key
+[$k, $secret] = App\Models\ApiKey::issue($merchant, App\Enums\ApiKeyMode::Test, 'reporting', ['balances:read','transactions:read']);
+```
+
+Requests over the scope get `403`; per-key rate limit is 120 req/min.
+
 ## Onboard another merchant
 
 ```bash

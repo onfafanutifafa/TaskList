@@ -34,6 +34,11 @@ class Merchant extends Model
         return $this->hasMany(LedgerAccount::class);
     }
 
+    public function conversions(): HasMany
+    {
+        return $this->hasMany(Conversion::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

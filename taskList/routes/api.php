@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\BalanceController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\CryptoDepositController;
+use App\Http\Controllers\Api\V1\FxController;
 use App\Http\Controllers\Api\V1\PayoutController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Webhooks\CryptoWatcherCallbackController;
@@ -14,38 +15,44 @@ use Illuminate\Support\Facades\Route;
 | Merchant API (v1)
 |--------------------------------------------------------------------------
 | Authenticated with a secret API key: `Authorization: Bearer sk_test_...`.
-| Mutating calls accept an `Idempotency-Key` header (required for money moves).
+| Rate-limited per key. Routes declare the scope (ability) they require, so a
+| least-privilege key can be restricted to exactly what it needs. Mutating
+| money calls also accept an `Idempotency-Key` header.
 */
-Route::prefix('v1')->middleware('api.key')->group(function () {
+Route::prefix('v1')->middleware(['api.key', 'throttle:api'])->group(function () {
 
-    Route::get('balance', [BalanceController::class, 'show']);
+    Route::get('balance', [BalanceController::class, 'show'])->middleware('ability:balances:read');
 
-    Route::get('transactions', [TransactionController::class, 'index']);
-    Route::get('transactions/{transaction}', [TransactionController::class, 'show']);
+    Route::get('transactions', [TransactionController::class, 'index'])->middleware('ability:transactions:read');
+    Route::get('transactions/{transaction}', [TransactionController::class, 'show'])->middleware('ability:transactions:read');
+
+    Route::post('fx/quote', [FxController::class, 'quote'])->middleware('ability:fx:read');
 
     Route::middleware('idempotency')->group(function () {
-        Route::post('collections', [CollectionController::class, 'store']);
-        Route::post('payouts', [PayoutController::class, 'store']);
-        Route::post('crypto/deposits', [CryptoDepositController::class, 'store']);
+        Route::post('collections', [CollectionController::class, 'store'])->middleware('ability:collections:write');
+        Route::post('payouts', [PayoutController::class, 'store'])->middleware('ability:payouts:write');
+        Route::post('crypto/deposits', [CryptoDepositController::class, 'store'])->middleware('ability:crypto:write');
+        Route::post('fx/conversions', [FxController::class, 'convert'])->middleware('ability:fx:write');
     });
 
-    Route::get('collections/{transaction}', [CollectionController::class, 'show']);
-    Route::get('payouts/{transaction}', [PayoutController::class, 'show']);
-    Route::get('crypto/deposits/{transaction}', [CryptoDepositController::class, 'show']);
+    Route::get('collections/{transaction}', [CollectionController::class, 'show'])->middleware('ability:collections:read');
+    Route::get('payouts/{transaction}', [PayoutController::class, 'show'])->middleware('ability:payouts:read');
+    Route::get('crypto/deposits/{transaction}', [CryptoDepositController::class, 'show'])->middleware('ability:crypto:read');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Provider callbacks (inbound, unauthenticated but verified per-provider)
+| Provider callbacks (inbound, verified per-provider, rate-limited by IP)
 |--------------------------------------------------------------------------
-| MTN MoMo PUTs/POSTs the final transaction status to these URLs. They are
-| public but every payload is verified and matched to a known reference.
+| MTN callbacks are re-verified via an authoritative status GET. The crypto
+| watcher callback is HMAC-signed and moves money only after verification.
 */
-Route::match(['post', 'put'], 'webhooks/mtn-momo/collection/{reference}', [MtnMomoCallbackController::class, 'collection'])
-    ->name('webhooks.mtn.collection');
-Route::match(['post', 'put'], 'webhooks/mtn-momo/disbursement/{reference}', [MtnMomoCallbackController::class, 'disbursement'])
-    ->name('webhooks.mtn.disbursement');
+Route::middleware('throttle:webhooks')->group(function () {
+    Route::match(['post', 'put'], 'webhooks/mtn-momo/collection/{reference}', [MtnMomoCallbackController::class, 'collection'])
+        ->name('webhooks.mtn.collection');
+    Route::match(['post', 'put'], 'webhooks/mtn-momo/disbursement/{reference}', [MtnMomoCallbackController::class, 'disbursement'])
+        ->name('webhooks.mtn.disbursement');
 
-// Signed on-chain payment notifications from the crypto watcher.
-Route::post('webhooks/crypto/{reference}', CryptoWatcherCallbackController::class)
-    ->name('webhooks.crypto');
+    Route::post('webhooks/crypto/{reference}', CryptoWatcherCallbackController::class)
+        ->name('webhooks.crypto');
+});

@@ -5,6 +5,47 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-07 — Grey-style FX corridor + security hardening + security review
+
+**State:** On `feat/psp-core` (PR #3 → main). Core + crypto already pushed; this
+work committed on top. `php artisan test` → **34 passed (98 assertions)**. Security
+review run (subagent) → no ≥8-confidence vulnerabilities; one correctness fix applied.
+
+**Done (verified):**
+- **FX conversion (the grey.co corridor).** `POST /v1/fx/quote` + `/v1/fx/conversions`.
+  Converts one wallet balance to another (e.g. USDT→GHS) at a quoted rate; spread →
+  `fx_revenue`. bcmath on decimal strings (no floats). Posts TWO single-currency
+  journals joined by `fx_clearing`. Completes: receive USDT → convert → MoMo payout.
+  Rate provider abstraction (`config`/`fake`). `BalanceService` now the shared
+  "available balance" (payouts + FX agree).
+- **Security hardening:**
+  - **Scoped API keys** — `abilities` column + `RequireAbility`; every `/v1` route
+    tagged `ability:*`. Restricted keys (read-only, collections-only) enforced.
+  - **Rate limiting** — `throttle:api` per key (120/min), `throttle:webhooks` per IP.
+  - **Security headers** middleware; **force HTTPS** in prod; `trustProxies`.
+  - **Idempotency** now consumes a key only on 2xx — errored attempts release it
+    (no permanent 409 after a provider blip); never double-processes.
+- **Security review** (subagent, adversarial): confirmed authn/scopes, IDOR→404,
+  idempotency scoping, HMAC webhook verification, no SQLi/mass-assignment. Applied
+  the one actionable finding (idempotency lock release on error).
+
+**Verified how:** +9 tests (FX quote/convert/insufficient/spread; scopes read-only
+vs collections-only vs full; security headers; idempotency-key-released-on-failure).
+Full suite 34 green.
+
+**Next:**
+1. Merge PR #3.
+2. Real rates feed (swap the `config` FX provider); quote TTL enforcement on execute.
+3. Per-network currency allow-list (MTN driver currently sends one configured
+   currency regardless of txn currency — fine single-corridor, gate before multi).
+4. Real chain watcher; per-deposit HD addresses; crypto→fiat as an FX pair.
+
+**Blocked / not done (by design):** payout/FX balance check is check-then-write
+(single-node safe; needs row locks/reserved entries for horizontal scale); no
+card/bank rails; no merchant UI.
+
+---
+
 ## 2026-08-07 — Add crypto deposits (stablecoin on-ramp)
 
 **State:** On `feat/psp-core` (core already committed `9a97e3d`), crypto work not yet

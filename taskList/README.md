@@ -9,7 +9,11 @@ truth for every unit of money moved.
 - **Mobile money:** MTN MoMo (Collections + Disbursements), sandbox-wired, behind a
   provider interface so M-Pesa / Airtel slot in later.
 - **Crypto:** USDT/USDC deposits on TRON/EVM, confirmed by a chain watcher via a
-  signed webhook; credits the merchant's balance in the asset (no FX to fiat yet).
+  signed webhook; credits the merchant's balance in the asset.
+- **FX:** convert between wallet balances (e.g. USDT → GHS) at a quoted rate — so
+  the full corridor is *receive USDT → convert to GHS → pay out to MTN MoMo*.
+- **Security:** scoped API keys, per-key rate limiting, signed webhooks, security
+  headers, HTTPS in prod.
 
 > Node is the software layer. Moving **real** money also needs per-country
 > licensing, PCI/KYC/AML, and live provider contracts — build/test on sandboxes.
@@ -46,6 +50,8 @@ Then follow the curl walkthrough in **[INSTRUCTIONS.md](INSTRUCTIONS.md)**.
 | POST | `/v1/payouts` | initiate a disbursement (balance-checked) |
 | POST | `/v1/crypto/deposits` | create a stablecoin deposit intent (returns an address) |
 | GET | `/v1/crypto/deposits/{id}` | fetch a deposit + on-chain status |
+| POST | `/v1/fx/quote` | quote a conversion (rate + spread + net) |
+| POST | `/v1/fx/conversions` | convert one wallet balance into another |
 | GET | `/v1/transactions` · `/v1/transactions/{id}` | list / fetch |
 | GET | `/v1/balance` | settled + available balance per currency/asset |
 | POST/PUT | `/webhooks/mtn-momo/{product}/{ref}` | MoMo callback (re-verified via poll) |

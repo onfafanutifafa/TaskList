@@ -87,7 +87,36 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   treating USDT as 2-decimal (it's 6); no FX to fiat yet — the merchant holds a USDT
   balance, not GHS. Payouts are mobile-money only; there is no crypto withdrawal.
 
-## 8. Reconciliation & ops (`app/Console/Commands/*`)
+## 8. FX conversion (`app/Services/Fx/*`)
+
+- `POST /v1/fx/quote` (read-only) returns rate + spread + net; `POST /v1/fx/conversions`
+  executes, moving one wallet balance to another. Amounts in the source asset's
+  minor units.
+- Rates via `RateProviderManager` (`config` provider; `->fake()` for tests). All
+  math is **bcmath on decimal strings** — no floats. Spread (`psp.fx.spread_bps`)
+  is booked to `fx_revenue`.
+- A conversion posts **two** single-currency journals meeting at `fx_clearing`
+  (a journal can't span currencies). Balance check reuses `BalanceService::available`.
+- **Traps:** trying to post one cross-currency journal (LedgerService rejects it);
+  float math on rates; forgetting differing minor-unit factors (USDT 6dp ↔ GHS 2dp);
+  converting more than the available (not just settled) balance.
+
+## 9. API security (`app/Http/Middleware/*`, `AppServiceProvider`)
+
+- **Scoped keys:** `RequireAbility` enforces a per-route `ability:*`; keys minted
+  with a restricted `abilities` array can't exceed their scope. NULL abilities =
+  full access. Issue restricted keys via `ApiKey::issue($m, $mode, $name, ['collections:write'])`.
+- **Rate limits:** `throttle:api` per API key (fallback IP), `throttle:webhooks`
+  per IP. Defined in `AppServiceProvider::boot`.
+- **Idempotency consumes only on success (2xx):** an errored attempt releases the
+  key so retries work and never double-process.
+- **Headers:** `SecurityHeaders` sets nosniff/DENY/Referrer-Policy/HSTS(TLS).
+  Prod forces HTTPS; `trustProxies` reads the real client behind the LB.
+- **Traps:** adding a `/v1` route without an `ability:*`; putting `throttle:api`
+  before `api.key` (the limiter needs the resolved key); returning 403 instead of
+  404 on cross-merchant reads.
+
+## 10. Reconciliation & ops (`app/Console/Commands/*`)
 
 - `psp:poll-pending` (scheduled every minute) settles mobile-money transactions
   whose callback was missed; `crypto:poll-deposits` does the same for crypto.

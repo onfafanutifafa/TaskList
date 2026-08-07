@@ -67,12 +67,22 @@ class EnforceIdempotency
 
         $request->attributes->set('idempotency_key', $key);
 
-        /** @var HttpResponse $response */
-        $response = $next($request);
+        try {
+            /** @var HttpResponse $response */
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            // A thrown error (provider outage, validation, conflict) means the
+            // request did not complete — release the lock so the client can retry
+            // the same key instead of being stuck on a permanent 409.
+            $record->delete();
 
-        // Persist successful and client-error responses so retries are stable;
-        // leave 5xx unrecorded so a genuine retry can try again.
-        if ($response->getStatusCode() < 500) {
+            throw $e;
+        }
+
+        // Only a successful response consumes the key (so it replays and can never
+        // double-process). Any error (validation 4xx, provider 5xx) releases the
+        // key so the client can correct and retry — an errored attempt moved no money.
+        if ($response->getStatusCode() < 400) {
             $record->update([
                 'status' => 'completed',
                 'response_code' => $response->getStatusCode(),

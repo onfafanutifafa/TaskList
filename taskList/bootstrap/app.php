@@ -3,6 +3,8 @@
 use App\Exceptions\ProviderException;
 use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnforceIdempotency;
+use App\Http\Middleware\RequireAbility;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,7 +25,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.key' => AuthenticateApiKey::class,
             'idempotency' => EnforceIdempotency::class,
+            'ability' => RequireAbility::class,
         ]);
+
+        // Hardening headers on every response.
+        $middleware->append(SecurityHeaders::class);
+
+        // Behind a load balancer/CDN in prod; trust its forwarding headers so
+        // isSecure()/rate-limit-by-IP see the real client + scheme.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Every error on the API surface is a JSON envelope, never HTML.

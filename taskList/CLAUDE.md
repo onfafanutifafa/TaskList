@@ -15,8 +15,12 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
   against the sandbox. Others (M-Pesa, Airtel) slot in behind the same interface.
 - **Crypto rail:** stablecoin deposits (USDT/USDC on TRON/EVM), confirmed by an
   off-box chain watcher via a signed webhook. Credits the merchant's balance **in
-  the asset** — no FX to fiat yet (that's the next step).
-- **Surface:** JSON API under `routes/api.php` (`/v1/*`). No merchant UI yet.
+  the asset**.
+- **FX:** merchants convert one wallet balance into another (e.g. USDT → GHS) at a
+  quoted rate with a spread. This completes the corridor: receive USDT → convert to
+  GHS → pay out to MTN MoMo (a grey.co-style flow).
+- **Surface:** JSON API under `routes/api.php` (`/v1/*`), scoped API keys,
+  per-key rate limiting. No merchant UI yet.
 
 > Node is the software layer. Moving **real** money additionally requires a
 > payment/EMI licence per country, PCI/KYC/AML, and live provider contracts —
@@ -58,6 +62,13 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
    authenticated merchant. Cross-merchant access returns **404**, never 403
    (don't leak existence).
 
+10. **Least privilege by scope + always confirm the money can't double-move.**
+    Every `/v1` route declares an `ability:*` scope (`RequireAbility`); keys can be
+    minted restricted (e.g. read-only, collections-only). Only a *successful* (2xx)
+    response consumes an `Idempotency-Key` — an errored attempt releases it so a
+    retry works and never double-processes. FX conversions post **two** balanced
+    single-currency journals joined by `fx_clearing` (a journal can't span currencies).
+
 9. **Crypto: the payer is untrusted, the watcher is trusted-but-verified.** A
    crypto deposit only settles when the chain watcher reports it via the signed
    webhook (HMAC-SHA256 over `"{ts}.{body}"`, replay window enforced) or the poll
@@ -74,7 +85,8 @@ app/
   Support/TransactionPayload.php  one serialiser for API + webhooks
   Enums/                          TransactionType/Status, LedgerDirection, AccountType, ApiKeyMode
   Services/Ledger/                LedgerService, AccountResolver, JournalLeg   (double-entry)
-  Services/Transactions/          Collection/Payout/CryptoDeposit services, TransactionReconciler
+  Services/Transactions/          Collection/Payout/CryptoDeposit services, BalanceService, TransactionReconciler
+  Services/Fx/                    FxService (quote + convert), rate providers (config/fake) + manager
   Services/Webhooks/              WebhookDispatcher (signed, retrying)
   Providers/MobileMoney/
     Contracts/                    MobileMoneyProvider + DTOs (MoneyRequest, ProviderResult, ProviderStatus)
@@ -87,8 +99,8 @@ app/
     Fake/FakeCryptoProvider.php   simulates on-chain funds for tests
     DepositEvaluation.php         deposit row -> ProviderResult (one "is it done?" truth)
     CryptoProviderManager.php     resolves the crypto driver (singleton)
-  Http/Middleware/                AuthenticateApiKey, EnforceIdempotency
-  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, Transaction, Balance
+  Http/Middleware/                AuthenticateApiKey, EnforceIdempotency, RequireAbility, SecurityHeaders
+  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, Fx, Transaction, Balance
   Http/Controllers/Webhooks/      MtnMomoCallbackController, CryptoWatcherCallbackController
 config/psp.php                    currencies, fees, providers, networks, crypto, webhooks
 routes/api.php                    the /v1 surface
@@ -113,6 +125,10 @@ Settlement journals (must balance):
   `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape as a collection.
 - **Payout success:** debit `merchant_payable` (amount+fee) · credit `momo_float`
   (amount) · credit `fee_revenue` (fee).
+- **FX conversion (two journals):** *source* — debit `merchant_payable(from)` ·
+  credit `fx_clearing(from)`; *dest* — debit `fx_clearing(to)` (gross) · credit
+  `merchant_payable(to)` (net) · credit `fx_revenue(to)` (spread). Each journal
+  balances within its own currency; `fx_clearing` carries the platform FX position.
 
 Payouts guard against overspend using **settled balance − in-flight payouts**
 (`PayoutService::availableBalance`).

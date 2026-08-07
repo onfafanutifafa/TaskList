@@ -78,6 +78,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | FX (currency conversion between wallet balances)
+    |--------------------------------------------------------------------------
+    | Merchants convert one balance into another (e.g. USDT -> GHS) at a quoted
+    | rate. `spread_bps` is the platform markup taken from the converted amount as
+    | revenue. Rates are "FROM:TO" = units of TO per 1 FROM; the inverse pair is
+    | derived automatically. A production build swaps the config provider for a
+    | live rates feed.
+    */
+    'fx' => [
+        'provider' => env('PSP_FX_PROVIDER', 'config'),
+        'spread_bps' => (int) env('PSP_FX_SPREAD_BPS', 100), // 1% markup
+        'quote_ttl_seconds' => (int) env('PSP_FX_QUOTE_TTL', 60),
+        'rates' => [
+            'USDT:GHS' => env('FX_USDT_GHS', '15.20'),
+            'USDC:GHS' => env('FX_USDC_GHS', '15.20'),
+            'USDT:KES' => env('FX_USDT_KES', '129.00'),
+            'EUR:GHS' => env('FX_EUR_GHS', '16.50'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Crypto deposits (stablecoin on-ramp)
     |--------------------------------------------------------------------------
     | Merchants receive stablecoins to a per-deposit address; an off-box chain

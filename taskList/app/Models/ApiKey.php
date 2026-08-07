@@ -13,7 +13,7 @@ class ApiKey extends Model
     use HasUuids;
 
     protected $fillable = [
-        'merchant_id', 'name', 'mode', 'display', 'last_four', 'key_hash', 'last_used_at',
+        'merchant_id', 'name', 'mode', 'abilities', 'display', 'last_four', 'key_hash', 'last_used_at',
     ];
 
     protected $hidden = ['key_hash'];
@@ -22,8 +22,19 @@ class ApiKey extends Model
     {
         return [
             'mode' => ApiKeyMode::class,
+            'abilities' => 'array',
             'last_used_at' => 'datetime',
         ];
+    }
+
+    /** NULL abilities or a "*" entry means full access. */
+    public function hasAbility(string $ability): bool
+    {
+        $abilities = $this->abilities;
+
+        return $abilities === null
+            || in_array('*', $abilities, true)
+            || in_array($ability, $abilities, true);
     }
 
     public function merchant(): BelongsTo
@@ -35,7 +46,10 @@ class ApiKey extends Model
      * Mint a new secret key for a merchant. Returns [ApiKey $model, string $plaintext].
      * The plaintext is shown to the merchant exactly once and never stored.
      */
-    public static function issue(Merchant $merchant, ApiKeyMode $mode, ?string $name = null): array
+    /**
+     * @param  array<int,string>|null  $abilities  null = full access; else a scope allow-list
+     */
+    public static function issue(Merchant $merchant, ApiKeyMode $mode, ?string $name = null, ?array $abilities = null): array
     {
         $secret = $mode->prefix().Str::random(40);
 
@@ -43,6 +57,7 @@ class ApiKey extends Model
             'merchant_id' => $merchant->id,
             'name' => $name,
             'mode' => $mode,
+            'abilities' => $abilities,
             'display' => substr($secret, 0, strlen($mode->prefix()) + 4).'…',
             'last_four' => substr($secret, -4),
             'key_hash' => self::hash($secret),

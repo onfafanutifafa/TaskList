@@ -8,7 +8,6 @@ use App\Models\Merchant;
 use App\Models\Transaction;
 use App\Providers\MobileMoney\Contracts\MoneyRequest;
 use App\Providers\MobileMoney\ProviderManager;
-use App\Services\Ledger\LedgerService;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -18,7 +17,7 @@ class PayoutService
 {
     public function __construct(
         private readonly ProviderManager $providers,
-        private readonly LedgerService $ledger,
+        private readonly BalanceService $balances,
         private readonly TransactionReconciler $reconciler,
     ) {}
 
@@ -85,14 +84,6 @@ class PayoutService
     /** Settled balance minus payouts that are initiated but not yet terminal. */
     public function availableBalance(Merchant $merchant, string $currency): Money
     {
-        $settled = $this->ledger->merchantBalance($merchant, $currency);
-
-        $inflight = (int) $merchant->transactions()
-            ->where('type', TransactionType::Payout->value)
-            ->where('currency', $currency)
-            ->whereIn('status', [TransactionStatus::Pending->value, TransactionStatus::Processing->value])
-            ->sum(DB::raw('amount_minor + fee_minor'));
-
-        return $settled->subtract(new Money($inflight, $currency));
+        return $this->balances->available($merchant, $currency);
     }
 }
