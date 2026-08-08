@@ -24,6 +24,7 @@ class TransactionReconciler
         private readonly ProviderManager $providers,
         private readonly LedgerService $ledger,
         private readonly WebhookDispatcher $webhooks,
+        private readonly BalanceService $balances,
     ) {}
 
     /**
@@ -88,6 +89,12 @@ class TransactionReconciler
                 ]);
 
                 $this->webhooks->dispatch($transaction, 'transaction.failed');
+            }
+
+            // A debit's hold is released once it reaches a terminal state: on success
+            // the ledger has moved the funds; on failure they return to the balance.
+            if ($transaction->type->isDebit()) {
+                $this->balances->release($transaction->merchant, $transaction->amount()->add($transaction->fee()));
             }
 
             return $transaction->refresh();

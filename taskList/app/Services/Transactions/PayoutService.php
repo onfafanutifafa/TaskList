@@ -11,7 +11,6 @@ use App\Providers\MobileMoney\ProviderManager;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class PayoutService
 {
@@ -37,14 +36,8 @@ class PayoutService
         }
 
         $transaction = DB::transaction(function () use ($merchant, $data, $currency, $amount, $idempotencyKey) {
-            $available = $this->availableBalance($merchant, $currency);
-
-            if ($amount->isGreaterThan($available)) {
-                throw new UnprocessableEntityHttpException(
-                    "Insufficient balance: need {$amount->toMajorString()} {$currency}, ".
-                    "available {$available->toMajorString()} {$currency}."
-                );
-            }
+            // Row-locked hold: atomically checks and reserves, or throws 422.
+            $this->balances->reserve($merchant, $amount);
 
             return $merchant->transactions()->create([
                 'type' => TransactionType::Payout,

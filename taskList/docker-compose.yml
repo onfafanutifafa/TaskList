@@ -1,0 +1,27 @@
+# Local Postgres for Node PSP. Production uses Postgres so that the row-locked
+# balance reservations (SELECT ... FOR UPDATE) actually serialise concurrent
+# spends — SQLite is fine for tests but does not model row-level locking.
+#
+#   docker compose up -d
+#   # then in .env:  DB_CONNECTION=pgsql  DB_HOST=127.0.0.1  DB_PORT=5432
+#   #                DB_DATABASE=node_psp DB_USERNAME=node   DB_PASSWORD=secret
+#   php artisan migrate
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: node_psp
+      POSTGRES_USER: node
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - node_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U node -d node_psp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  node_pgdata:

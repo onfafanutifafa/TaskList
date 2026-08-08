@@ -17,6 +17,8 @@ truth for every unit of money moved.
   the full corridor is *receive foreign currency → convert to GHS → pay out to MoMo*.
 - **Security:** scoped API keys, per-key rate limiting, signed webhooks, security
   headers, HTTPS in prod.
+- **Concurrency-safe:** debits hold funds via row-locked reservations
+  (`SELECT ... FOR UPDATE` on Postgres), so concurrent spenders can't oversell.
 
 > Node is the software layer. Moving **real** money also needs per-country
 > licensing, PCI/KYC/AML, and live provider contracts — build/test on sandboxes.
