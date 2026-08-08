@@ -70,19 +70,18 @@ class FxService
         return DB::transaction(function () use ($merchant, $from, $to, $fromMinor, $reference, $idempotencyKey) {
             $quote = $this->quote($from, $to, $fromMinor);
 
-            $available = $this->balances->available($merchant, $from);
-            if ($quote->from->isGreaterThan($available)) {
-                throw new UnprocessableEntityHttpException(
-                    "Insufficient {$from} balance: need {$quote->from->toMajorString()}, ".
-                    "available {$available->toMajorString()}."
-                );
-            }
+            // Row-locked hold on the source balance: serialises against concurrent
+            // spends and throws 422 if the balance can't cover it. The conversion
+            // settles synchronously below, so the hold is released in the same txn.
+            $this->balances->reserve($merchant, $quote->from);
 
             // Journal 1 (source currency): move funds out of the merchant into clearing.
             $this->ledger->post([
                 JournalLeg::debit($this->accounts->merchantPayable($merchant, $from), $quote->from),
                 JournalLeg::credit($this->accounts->fxClearing($from), $quote->from),
             ], null, "FX out {$from}->{$to}");
+
+            $this->balances->release($merchant, $quote->from);
 
             // Journal 2 (destination currency): clearing funds the merchant net + spread revenue.
             $legs = [

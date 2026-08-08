@@ -5,6 +5,40 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-08 — Concurrency hardening: Postgres + row-locked reservations
+
+**State:** On `feat/concurrency-reservations` (off `main`). `php artisan test` →
+**47 passed (142 assertions)**. Migrations + a live concurrency race verified on
+real Postgres.
+
+**Done (verified):**
+- **Row-locked balance reservations** replace the old check-then-write guard.
+  `balance_reservations (merchant_id, currency, reserved_minor)` unique row is the
+  lock anchor. `BalanceService::reserve()` (inside a DB txn) `lockForUpdate`s the row,
+  re-checks `available = settled − reserved`, and raises the hold or throws 422.
+  `release()` frees it. `available()` = settled − reserved.
+- **Wired into every debit:** Payout, BankPayout, FX-out reserve on initiate;
+  `TransactionReconciler` releases on any debit terminal (settled → moved, failed →
+  returned). Removed the inflight-sum query.
+- **Postgres:** `docker-compose.yml` (postgres:16), `.env` pgsql block documented.
+  All 17 migrations run clean on PG. Stack: SQLite dev/CI, **Postgres prod** (the
+  lock is a no-op on SQLite, which serialises writes anyway).
+
+**Verified how:** +4 reservation tests (reserve↓available/release↑, over-reserve
+throws & holds nothing, sequential reserves can't exceed, failed payout releases).
+**Live race on Postgres:** funded $1,000 USD, fired **10 parallel** FX conversions
+of $300 → exactly **3× 201, 7× 422**, USD left $100.00, 3 conversions, never negative.
+This is the actual proof `FOR UPDATE` serialises concurrent spends.
+
+**Next:** open PR → main. Then: settlement/webhook queue (Horizon), per-corridor
+currency allow-list on the MTN driver, real provider/BaaS/watcher/rates + liquidity
+partner behind the existing seams.
+
+**Blocked / not done (by design):** provider integrations still stubbed/sandboxed;
+FX rates are config; no crypto withdrawal.
+
+---
+
 ## 2026-08-08 — Outbound foreign-currency (bank) payout
 
 **State:** On `feat/outbound-payout` (branched off merged `main`). `php artisan test`

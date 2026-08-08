@@ -198,6 +198,34 @@ restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read
 
 Requests over the scope get `403`; per-key rate limit is 120 req/min.
 
+## Running on Postgres (production parity)
+
+SQLite is fine for dev/tests, but the balance reservations use row locking
+(`SELECT ... FOR UPDATE`), which only does its job on Postgres. To run against it:
+
+```bash
+docker compose up -d          # starts postgres:16 on :5432 (see docker-compose.yml)
+```
+
+Then in `.env` switch the DB block to:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=node_psp
+DB_USERNAME=node
+DB_PASSWORD=secret
+```
+
+```bash
+php artisan migrate
+```
+
+Concurrency is real here: N simultaneous payouts/conversions on the same balance
+serialise on the reservation row, and only those the balance can cover succeed —
+the rest get `422`, and the balance never goes negative.
+
 ## Onboard another merchant
 
 ```bash

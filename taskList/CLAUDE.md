@@ -137,8 +137,14 @@ Settlement journals (must balance):
 - **Bank deposit (virtual account):** debit `bank_float` (gross) · credit
   `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape, different float.
 - **Bank payout (outbound):** debit `merchant_payable` (amount+fee) · credit
-  `bank_float` (amount) · credit `fee_revenue` (fee). Settles on confirmation;
-  `available` balance subtracts in-flight payouts of BOTH rails so no overspend.
+  `bank_float` (amount) · credit `fee_revenue` (fee). Settles on confirmation.
+- **Spending is guarded by row-locked reservations, not a check-then-write.** Every
+  debit (payout / bank payout / FX-out) calls `BalanceService::reserve()` inside a DB
+  transaction, which `SELECT ... FOR UPDATE`s the `(merchant, currency)` reservation
+  row, re-checks `available = settled − reserved` under the lock, and raises the hold
+  — so concurrent spenders serialise and cannot oversell. The hold is released when
+  the debit settles (funds moved) or fails (funds returned). **Prod runs Postgres**
+  so the lock is real; SQLite (tests) serialises writes anyway.
 - **Payout success:** debit `merchant_payable` (amount+fee) · credit `momo_float`
   (amount) · credit `fee_revenue` (fee).
 - **FX conversion (two journals):** *source* — debit `merchant_payable(from)` ·

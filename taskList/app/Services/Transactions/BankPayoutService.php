@@ -11,7 +11,6 @@ use App\Providers\Banking\Contracts\BankPayoutRequest;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Sends foreign currency (USD/GBP/EUR) out of a merchant's balance to an external
@@ -40,14 +39,8 @@ class BankPayoutService
         }
 
         $transaction = DB::transaction(function () use ($merchant, $data, $currency, $amount, $idempotencyKey) {
-            $available = $this->balances->available($merchant, $currency);
-
-            if ($amount->isGreaterThan($available)) {
-                throw new UnprocessableEntityHttpException(
-                    "Insufficient {$currency} balance: need {$amount->toMajorString()}, ".
-                    "available {$available->toMajorString()}."
-                );
-            }
+            // Row-locked hold: atomically checks and reserves, or throws 422.
+            $this->balances->reserve($merchant, $amount);
 
             return $merchant->transactions()->create([
                 'type' => TransactionType::BankPayout,

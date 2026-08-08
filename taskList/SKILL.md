@@ -136,6 +136,19 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   before `api.key` (the limiter needs the resolved key); returning 403 instead of
   404 on cross-merchant reads.
 
+## 9b. Balance reservations / concurrency (`app/Services/Transactions/BalanceService.php`)
+
+- Every debit (payout, bank payout, FX-out) holds funds via `BalanceService::reserve()`
+  **inside a DB transaction**: it `lockForUpdate`s the `(merchant, currency)` row in
+  `balance_reservations`, re-checks `available = settled − reserved` under the lock,
+  and raises the hold — so N concurrent spenders serialise and can't oversell.
+- `available()` = settled − reserved; `TransactionReconciler` calls `release()` on any
+  debit reaching a terminal state (settled → funds already moved; failed → returned).
+- **Traps:** calling `reserve()/release()` outside a transaction (the FOR UPDATE lock
+  only holds for the enclosing txn); reserving in one currency and releasing another;
+  testing the race on SQLite (it serialises writes — prove it on Postgres). Verified
+  live on Postgres: 10 parallel conversions over a 3-fit balance → exactly 3 settle.
+
 ## 10. Reconciliation & ops (`app/Console/Commands/*`)
 
 - `psp:poll-pending` (scheduled every minute) settles mobile-money transactions
