@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\BalanceController;
+use App\Http\Controllers\Api\V1\BankPayoutController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\CryptoDepositController;
 use App\Http\Controllers\Api\V1\FxController;
@@ -39,11 +40,13 @@ Route::prefix('v1')->middleware(['api.key', 'throttle:api'])->group(function () 
         Route::post('payouts', [PayoutController::class, 'store'])->middleware('ability:payouts:write');
         Route::post('crypto/deposits', [CryptoDepositController::class, 'store'])->middleware('ability:crypto:write');
         Route::post('fx/conversions', [FxController::class, 'convert'])->middleware('ability:fx:write');
+        Route::post('bank-payouts', [BankPayoutController::class, 'store'])->middleware('ability:bank_payouts:write');
     });
 
     Route::get('collections/{transaction}', [CollectionController::class, 'show'])->middleware('ability:collections:read');
     Route::get('payouts/{transaction}', [PayoutController::class, 'show'])->middleware('ability:payouts:read');
     Route::get('crypto/deposits/{transaction}', [CryptoDepositController::class, 'show'])->middleware('ability:crypto:read');
+    Route::get('bank-payouts/{transaction}', [BankPayoutController::class, 'show'])->middleware('ability:bank_payouts:read');
 });
 
 /*

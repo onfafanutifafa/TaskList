@@ -12,6 +12,7 @@ truth for every unit of money moved.
   signed webhook; credits the merchant's balance in the asset.
 - **Virtual accounts:** virtual USD/GBP/EUR receiving accounts (BaaS-issued);
   incoming payments credited via a signed webhook.
+- **Outbound bank payout:** wire USD/GBP/EUR out to an external bank beneficiary.
 - **FX:** convert between wallet balances (e.g. USD → GHS) at a quoted rate — so
   the full corridor is *receive foreign currency → convert to GHS → pay out to MoMo*.
 - **Security:** scoped API keys, per-key rate limiting, signed webhooks, security
@@ -54,6 +55,8 @@ Then follow the curl walkthrough in **[INSTRUCTIONS.md](INSTRUCTIONS.md)**.
 | GET | `/v1/crypto/deposits/{id}` | fetch a deposit + on-chain status |
 | POST | `/v1/virtual-accounts` | open a virtual USD/GBP/EUR receiving account |
 | GET | `/v1/virtual-accounts` · `/{id}` | list / fetch accounts |
+| POST | `/v1/bank-payouts` | wire foreign currency out to an external bank |
+| GET | `/v1/bank-payouts/{id}` | fetch an outbound payout |
 | POST | `/v1/fx/quote` | quote a conversion (rate + spread + net) |
 | POST | `/v1/fx/conversions` | convert one wallet balance into another |
 | POST | `/webhooks/banking/{account}` | signed BaaS incoming-payment notification |

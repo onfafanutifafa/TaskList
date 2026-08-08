@@ -96,9 +96,13 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   `POST /webhooks/banking/{account}` (HMAC-SHA256 + replay window); they create a
   `bank_deposit` transaction and settle immediately (debit `bank_float`, credit
   merchant net of fee). Idempotent on the partner's `payment_reference`.
+- **Outbound:** `POST /v1/bank-payouts` wires USD/GBP/EUR out to an external
+  beneficiary (stored in tx `meta.beneficiary`). Mirrors mobile payout — settles on
+  confirmation (poll via `bank:poll-payouts`), and `BalanceService::available`
+  subtracts in-flight payouts of BOTH rails so a merchant can't overspend.
 - **Add a currency/rail:** extend `config('psp.banking.currencies'|'rails')` and the
-  BaaS driver's `match`. **Real BaaS:** implement `VirtualAccountProvider` and register
-  it in `BankingProviderManager`.
+  BaaS driver's `match`. **Real BaaS:** implement `BankingProvider` (issuance +
+  payout) and register it in `BankingProviderManager`.
 - **Traps:** trusting the payer instead of the signed partner; double-crediting a
   re-delivered webhook (guard on `payment_reference`); currency mismatch between the
   payload and the account.

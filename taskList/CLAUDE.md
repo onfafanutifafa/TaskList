@@ -19,6 +19,8 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
 - **Virtual accounts:** merchants get virtual USD/GBP/EUR receiving accounts (issued
   by a banking-as-a-service partner); incoming international payments credit the
   balance via a signed BaaS webhook.
+- **Outbound bank payout:** merchants wire USD/GBP/EUR out of their balance to an
+  external bank beneficiary via the same BaaS partner (settles on confirmation).
 - **FX:** merchants convert one wallet balance into another (e.g. USD → GHS) at a
   quoted rate with a spread. Together these are the grey.co-style flow: receive
   foreign currency (bank or stablecoin) → convert to local → pay out to MTN MoMo.
@@ -109,7 +111,7 @@ app/
     Fake/FakeBankingProvider.php  test double
     BankingProviderManager.php    resolves the banking driver (singleton)
   Http/Middleware/                AuthenticateApiKey, EnforceIdempotency, RequireAbility, SecurityHeaders
-  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, VirtualAccount, Fx, Transaction, Balance
+  Http/Controllers/Api/V1/        Collection, Payout, CryptoDeposit, VirtualAccount, BankPayout, Fx, Transaction, Balance
   Http/Controllers/Webhooks/      MtnMomo, CryptoWatcher, Banking callback controllers
 config/psp.php                    currencies, fees, providers, networks, crypto, webhooks
 routes/api.php                    the /v1 surface
@@ -134,6 +136,9 @@ Settlement journals (must balance):
   `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape as a collection.
 - **Bank deposit (virtual account):** debit `bank_float` (gross) · credit
   `merchant_payable` (net) · credit `fee_revenue` (fee). Same shape, different float.
+- **Bank payout (outbound):** debit `merchant_payable` (amount+fee) · credit
+  `bank_float` (amount) · credit `fee_revenue` (fee). Settles on confirmation;
+  `available` balance subtracts in-flight payouts of BOTH rails so no overspend.
 - **Payout success:** debit `merchant_payable` (amount+fee) · credit `momo_float`
   (amount) · credit `fee_revenue` (fee).
 - **FX conversion (two journals):** *source* — debit `merchant_payable(from)` ·

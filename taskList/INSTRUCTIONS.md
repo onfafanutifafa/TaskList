@@ -146,6 +146,24 @@ curl -s -X POST http://127.0.0.1:8000/webhooks/banking/$ACCT \
 > need a licensed bank/BaaS). Node integrates it via account issuance + this one
 > signed webhook, idempotent on `payment_reference`.
 
+## Outbound foreign-currency payout
+
+Wire USD/GBP/EUR out of a merchant's balance to an external bank beneficiary
+(drawn from that currency wallet; settles once the partner confirms):
+
+```bash
+curl -s http://127.0.0.1:8000/v1/bank-payouts \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"amount":50000,"currency":"USD","reference":"out-1",
+       "beneficiary":{"account_name":"Jane Supplier","account_number":"12345678",
+                      "bank_name":"Chase","routing_number":"021000021"}}'
+# -> 201 { type: bank_payout, status: processing }; `bank:poll-payouts` settles it
+```
+
+This closes the round trip: **receive (virtual account / crypto) → FX → pay out
+(MoMo locally, or bank wire in foreign currency).**
+
 ## FX conversion (grey.co-style corridor)
 
 Convert one wallet balance into another. Quote first (no side effects), then execute:
@@ -170,8 +188,8 @@ Rates live in `config/psp.php` (`psp.fx.rates`); `PSP_FX_SPREAD_BPS` is the mark
 
 Every `/v1` route requires a scope. A key with no scopes set has full access; a
 restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read`,
-`crypto:write/read`, `virtual_accounts:write/read`, `fx:write/read`,
-`transactions:read`, `balances:read`.
+`crypto:write/read`, `virtual_accounts:write/read`, `bank_payouts:write/read`,
+`fx:write/read`, `transactions:read`, `balances:read`.
 
 ```php
 // tinker: issue a read-only key

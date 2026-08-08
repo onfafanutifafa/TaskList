@@ -2,19 +2,48 @@
 
 namespace App\Providers\Banking\Fake;
 
+use App\Providers\Banking\Contracts\BankingProvider;
+use App\Providers\Banking\Contracts\BankPayoutRequest;
 use App\Providers\Banking\Contracts\VirtualAccountDetails;
-use App\Providers\Banking\Contracts\VirtualAccountProvider;
 use App\Providers\Banking\Contracts\VirtualAccountRequest;
+use App\Providers\MobileMoney\Contracts\ProviderResult;
+use App\Providers\MobileMoney\Contracts\ProviderStatus;
 
 /** In-memory banking provider for tests. */
-class FakeBankingProvider implements VirtualAccountProvider
+class FakeBankingProvider implements BankingProvider
 {
-    /** @var list<array{method:string,currency:string}> */
+    /** @var list<array{method:string,currency?:string,reference?:string}> */
     public array $calls = [];
+
+    public bool $payoutInitiationSucceeds = true;
+
+    public ProviderStatus $payoutResolvesTo = ProviderStatus::Successful;
 
     public function name(): string
     {
         return 'fake_bank';
+    }
+
+    public function payout(BankPayoutRequest $request): ProviderResult
+    {
+        $this->calls[] = ['method' => 'payout', 'reference' => $request->reference];
+
+        return $this->payoutInitiationSucceeds
+            ? ProviderResult::accepted(ProviderStatus::Pending)
+            : ProviderResult::failed('rejected', 'Bank rejected the payout (fake).');
+    }
+
+    public function payoutStatus(string $reference): ProviderResult
+    {
+        $this->calls[] = ['method' => 'payoutStatus', 'reference' => $reference];
+
+        return new ProviderResult(
+            accepted: true,
+            status: $this->payoutResolvesTo,
+            providerReference: 'FAKEPO-'.substr($reference, 0, 8),
+            failureCode: $this->payoutResolvesTo === ProviderStatus::Failed ? 'declined' : null,
+            failureReason: $this->payoutResolvesTo === ProviderStatus::Failed ? 'Payout declined (fake).' : null,
+        );
     }
 
     public function createAccount(VirtualAccountRequest $request): VirtualAccountDetails
