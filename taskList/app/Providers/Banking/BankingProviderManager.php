@@ -3,7 +3,7 @@
 namespace App\Providers\Banking;
 
 use App\Providers\Banking\Baas\BaasVirtualAccountProvider;
-use App\Providers\Banking\Contracts\VirtualAccountProvider;
+use App\Providers\Banking\Contracts\BankingProvider;
 use App\Providers\Banking\Fake\FakeBankingProvider;
 use RuntimeException;
 
@@ -14,9 +14,9 @@ class BankingProviderManager
         'baas' => BaasVirtualAccountProvider::class,
     ];
 
-    private ?VirtualAccountProvider $override = null;
+    private ?BankingProvider $override = null;
 
-    public function driver(): VirtualAccountProvider
+    public function driver(): BankingProvider
     {
         if ($this->override) {
             return $this->override;

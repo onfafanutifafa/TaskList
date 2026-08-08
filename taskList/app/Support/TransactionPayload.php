@@ -30,6 +30,10 @@ final class TransactionPayload
             'failed_at' => optional($transaction->failed_at)->toIso8601String(),
         ];
 
+        if ($transaction->type === \App\Enums\TransactionType::BankPayout && isset($transaction->meta['beneficiary'])) {
+            $payload['beneficiary'] = $transaction->meta['beneficiary'];
+        }
+
         if ($transaction->relationLoaded('cryptoDeposit') && $transaction->cryptoDeposit) {
             $d = $transaction->cryptoDeposit;
             $payload['crypto'] = [

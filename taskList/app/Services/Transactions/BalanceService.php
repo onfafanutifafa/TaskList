@@ -19,11 +19,11 @@ class BalanceService
         return $this->ledger->merchantBalance($merchant, $currency);
     }
 
-    /** Settled balance minus money already committed to in-flight payouts. */
+    /** Settled balance minus money already committed to in-flight payouts (any rail). */
     public function available(Merchant $merchant, string $currency): Money
     {
         $inflight = (int) $merchant->transactions()
-            ->where('type', TransactionType::Payout->value)
+            ->whereIn('type', [TransactionType::Payout->value, TransactionType::BankPayout->value])
             ->where('currency', $currency)
             ->whereIn('status', [TransactionStatus::Pending->value, TransactionStatus::Processing->value])
             ->sum(DB::raw('amount_minor + fee_minor'));

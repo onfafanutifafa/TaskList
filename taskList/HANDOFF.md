@@ -5,6 +5,40 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-08 — Outbound foreign-currency (bank) payout
+
+**State:** On `feat/outbound-payout` (branched off merged `main`). `php artisan test`
+→ **43 passed (131 assertions)**. Live corridor smoke test passed.
+
+**Done (verified):**
+- **`POST/GET /v1/bank-payouts`** — wire USD/GBP/EUR out of a merchant balance to an
+  external bank beneficiary (beneficiary stored in tx `meta`). Mirrors the mobile
+  payout: created Pending → provider submits → Processing → poll/settle on success
+  (debit `merchant_payable` amount+fee, credit `bank_float`, fee→revenue). Failure
+  moves no money.
+- **Banking provider is now bidirectional:** `BankingProvider` composite interface
+  (`VirtualAccountProvider` + `BankPayoutProvider`); BaaS + Fake implement `payout`
+  + `payoutStatus`. `TransactionType::BankPayout` + `isDebit()`; `bank:poll-payouts`
+  command (scheduled).
+- **Overspend guard generalised:** `BalanceService::available` now subtracts in-flight
+  payouts of BOTH rails (mobile + bank).
+- Scopes `bank_payouts:read/write`; `beneficiary` surfaced in the transaction payload.
+
+**Verified how:** +4 tests (insufficient balance, success draws down, in-flight
+reduces available across rails, provider rejection moves no money). Live: funded a
+USD virtual account ($2,000 in → $1,970 net), wired $500 out to a Chase beneficiary,
+polled → settled, balance $1,470.00. Round trip (receive → FX → pay out) now complete.
+
+**Next:** open PR → main; real BaaS partner (issuance + payout + a payout webhook to
+replace the poll stub); FX-on-payout (auto-convert local→USD at send); liquidity/FX
+partner integration behind the rate + banking seams (see the "liquidity is the moat"
+note — our provider abstractions are exactly where a partner like that plugs in).
+
+**Blocked / not done (by design):** BaaS payout is a stub (real wire needs a licensed
+partner); no payout webhook yet (poll only); balance guard still check-then-write.
+
+---
+
 ## 2026-08-07 — Virtual USD/GBP/EUR receiving accounts
 
 **State:** On `feat/psp-core` (PR #3 → main). `php artisan test` → **39 passed

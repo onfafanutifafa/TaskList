@@ -27,12 +27,14 @@ class TransactionReconciler
     ) {}
 
     /**
-     * Ask the mobile-money provider for the current status and apply it.
-     * Crypto deposits reconcile through CryptoDepositService, not here.
+     * Ask the mobile-money provider for the current status and apply it. Crypto
+     * deposits and bank payouts reconcile through their own services, not here.
      */
     public function poll(Transaction $transaction): Transaction
     {
-        if ($transaction->status->isTerminal() || $transaction->type === TransactionType::CryptoDeposit) {
+        if ($transaction->status->isTerminal()
+            || $transaction->type === TransactionType::CryptoDeposit
+            || $transaction->type === TransactionType::BankPayout) {
             return $transaction;
         }
 
@@ -67,6 +69,7 @@ class TransactionReconciler
                     TransactionType::CryptoDeposit => $this->ledger->recordDepositSettlement($transaction),
                     TransactionType::BankDeposit => $this->ledger->recordBankDepositSettlement($transaction),
                     TransactionType::Payout => $this->ledger->recordPayoutSettlement($transaction),
+                    TransactionType::BankPayout => $this->ledger->recordBankPayoutSettlement($transaction),
                 };
 
                 $transaction->update([

@@ -3,17 +3,19 @@
 namespace App\Providers\Banking\Baas;
 
 use App\Exceptions\ProviderException;
+use App\Providers\Banking\Contracts\BankingProvider;
+use App\Providers\Banking\Contracts\BankPayoutRequest;
 use App\Providers\Banking\Contracts\VirtualAccountDetails;
-use App\Providers\Banking\Contracts\VirtualAccountProvider;
 use App\Providers\Banking\Contracts\VirtualAccountRequest;
+use App\Providers\MobileMoney\Contracts\ProviderResult;
+use App\Providers\MobileMoney\Contracts\ProviderStatus;
 
 /**
  * Stand-in for a banking-as-a-service partner (e.g. an issuing bank API). It
- * derives stable, plausible account coordinates from the merchant + currency; a
- * production build replaces this with the partner's account-issuance API call.
- * Rail + bank name come from config.
+ * issues virtual account coordinates and accepts outbound wires; a production
+ * build replaces both with the partner's real API. Rail + bank name from config.
  */
-class BaasVirtualAccountProvider implements VirtualAccountProvider
+class BaasVirtualAccountProvider implements BankingProvider
 {
     /** @param array<string,mixed> $config the `psp.banking` block */
     public function __construct(private readonly array $config) {}
@@ -21,6 +23,22 @@ class BaasVirtualAccountProvider implements VirtualAccountProvider
     public function name(): string
     {
         return 'baas';
+    }
+
+    public function payout(BankPayoutRequest $request): ProviderResult
+    {
+        // A real driver submits the wire here and returns the partner's payout id.
+        return ProviderResult::accepted(ProviderStatus::Pending, ['submitted' => true]);
+    }
+
+    public function payoutStatus(string $reference): ProviderResult
+    {
+        // Stub: a real driver queries the partner. Treat as settled once submitted.
+        return new ProviderResult(
+            accepted: true,
+            status: ProviderStatus::Successful,
+            providerReference: 'baaspo_'.substr(sha1($reference), 0, 20),
+        );
     }
 
     public function createAccount(VirtualAccountRequest $request): VirtualAccountDetails

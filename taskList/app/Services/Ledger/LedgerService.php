@@ -175,6 +175,32 @@ class LedgerService
         $this->post($legs, $transaction, "Payout {$transaction->reference}");
     }
 
+    /**
+     * Settle a succeeded bank payout: draw down the merchant's payable by amount+fee,
+     * cash leaves the bank float, any fee is revenue. Idempotent per transaction.
+     */
+    public function recordBankPayoutSettlement(Transaction $transaction): void
+    {
+        if ($this->alreadyPosted($transaction)) {
+            return;
+        }
+
+        $amount = $transaction->amount();
+        $fee = $transaction->fee();
+        $debitFromMerchant = $amount->add($fee);
+
+        $legs = [
+            JournalLeg::debit($this->accounts->merchantPayable($transaction->merchant, $debitFromMerchant->currency), $debitFromMerchant),
+            JournalLeg::credit($this->accounts->bankFloat($amount->currency), $amount),
+        ];
+
+        if ($fee->isPositive()) {
+            $legs[] = JournalLeg::credit($this->accounts->feeRevenue($fee->currency), $fee);
+        }
+
+        $this->post($legs, $transaction, "Bank payout {$transaction->reference}");
+    }
+
     private function alreadyPosted(Transaction $transaction): bool
     {
         return $transaction->ledgerEntries()->exists();
