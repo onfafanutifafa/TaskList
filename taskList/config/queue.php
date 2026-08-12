@@ -68,9 +68,11 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 150),
             'block_for' => null,
-            'after_commit' => false,
+            // Never enqueue settlement/webhook work until the DB transaction that
+            // created the row has committed — otherwise a worker can race ahead of it.
+            'after_commit' => true,
         ],
 
         'deferred' => [

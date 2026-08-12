@@ -19,6 +19,8 @@ truth for every unit of money moved.
   headers, HTTPS in prod.
 - **Concurrency-safe:** debits hold funds via row-locked reservations
   (`SELECT ... FOR UPDATE` on Postgres), so concurrent spenders can't oversell.
+- **Queued (Horizon):** provider settlement and webhook delivery run on Redis
+  queues off the request path; run workers with `php artisan horizon`.
 
 > Node is the software layer. Moving **real** money also needs per-country
 > licensing, PCI/KYC/AML, and live provider contracts — build/test on sandboxes.

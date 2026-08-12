@@ -26,6 +26,9 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
   foreign currency (bank or stablecoin) → convert to local → pay out to MTN MoMo.
 - **Surface:** JSON API under `routes/api.php` (`/v1/*`), scoped API keys,
   per-key rate limiting. No merchant UI yet.
+- **Queues (Horizon):** settlement (provider polling) and webhook delivery run on
+  Redis-backed queues, not in the request. Inbound callbacks/schedulers enqueue;
+  workers do the slow work.
 
 > Node is the software layer. Moving **real** money additionally requires a
 > payment/EMI licence per country, PCI/KYC/AML, and live provider contracts —
@@ -67,6 +70,15 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
    authenticated merchant. Cross-merchant access returns **404**, never 403
    (don't leak existence).
 
+11. **Slow work goes on a queue; enqueue after commit; jobs stay idempotent.**
+    Provider status polls (`ReconcileTransaction`, queue `settlement`) and merchant
+    webhook POSTs (`DeliverWebhook`, queue `webhooks`) never run in the request —
+    callbacks and schedulers enqueue them. `redis.after_commit = true`, so a job is
+    only enqueued once the DB txn that created its row commits (no worker racing the
+    write). Jobs must be safe to retry: settlement is guarded by terminal-state, and
+    `ReconcileTransaction` carries `WithoutOverlapping`. Never move money inside a job
+    without going through `TransactionReconciler` (the one idempotent settlement point).
+
 10. **Least privilege by scope + always confirm the money can't double-move.**
     Every `/v1` route declares an `ability:*` scope (`RequireAbility`); keys can be
     minted restricted (e.g. read-only, collections-only). Only a *successful* (2xx)
@@ -94,6 +106,7 @@ app/
   Services/Transactions/          Collection/Payout/CryptoDeposit services, BalanceService, TransactionReconciler
   Services/Fx/                    FxService (quote + convert), rate providers (config/fake) + manager
   Services/Webhooks/              WebhookDispatcher (signed, retrying)
+  Jobs/                           ReconcileTransaction (queue: settlement), DeliverWebhook (queue: webhooks)
   Providers/MobileMoney/
     Contracts/                    MobileMoneyProvider + DTOs (MoneyRequest, ProviderResult, ProviderStatus)
     Mtn/MtnMomoProvider.php       real MTN MoMo driver (token cache, requesttopay, transfer, status)

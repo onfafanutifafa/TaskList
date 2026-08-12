@@ -149,6 +149,22 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   testing the race on SQLite (it serialises writes — prove it on Postgres). Verified
   live on Postgres: 10 parallel conversions over a 3-fit balance → exactly 3 settle.
 
+## 9c. Queues (Horizon) (`app/Jobs/*`, `config/horizon.php`)
+
+- Two Redis queues: **settlement** (`ReconcileTransaction` — polls the provider and
+  settles) and **webhooks** (`DeliverWebhook` — signs + POSTs to the merchant).
+  Horizon supervisor processes them in priority order settlement → webhooks → default.
+- Enqueued by: inbound MTN callback (fast 200, worker polls), the `psp:poll-pending`
+  / `crypto:poll-deposits` / `bank:poll-payouts` schedulers, `webhooks:flush`, and
+  `WebhookDispatcher::dispatch`. `redis.after_commit = true` defers dispatch to
+  post-commit.
+- Run workers with `php artisan horizon`; dashboard at `/horizon` (gated by
+  `HORIZON_DASHBOARD_EMAILS` outside local). Tests use the `sync` queue, so jobs run
+  inline — assert with `Queue::fake()`.
+- **Traps:** doing a blocking provider call in the request instead of enqueuing;
+  a non-idempotent job (settlement must no-op on terminal); forgetting `after_commit`
+  and racing the DB write; not scoping `WithoutOverlapping` per transaction id.
+
 ## 10. Reconciliation & ops (`app/Console/Commands/*`)
 
 - `psp:poll-pending` (scheduled every minute) settles mobile-money transactions

@@ -5,6 +5,40 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-12 — Settlement + webhook queues (Horizon)
+
+**State:** On `feat/horizon-queue` (off `main`). `php artisan test` → **52 passed
+(152 assertions)**. Verified live on real Redis with a worker.
+
+**Done (verified):**
+- **Laravel Horizon** installed + configured. Two Redis queues: **settlement**
+  (`ReconcileTransaction` — polls provider, settles; `WithoutOverlapping` per txn,
+  5 tries + backoff) and **webhooks** (`DeliverWebhook`). Supervisor priority
+  settlement → webhooks → default. `config/queue.php` redis `after_commit = true`.
+- **Slow work moved off the request path:** MTN callback now enqueues a reconcile
+  (returns instantly) instead of a blocking GET; `WebhookDispatcher::dispatch`
+  enqueues `DeliverWebhook`; the `psp:poll-pending` / `crypto:poll-deposits` /
+  `bank:poll-payouts` / `webhooks:flush` commands now enqueue jobs instead of
+  working inline. `horizon:snapshot` scheduled.
+- **Infra:** Redis added to `docker-compose.yml`; `.env.example` QUEUE_CONNECTION=redis
+  + `HORIZON_DASHBOARD_EMAILS`; dashboard gated by a `viewHorizon` gate. Tests use
+  the `sync` queue (jobs inline), so no Redis needed for CI.
+
+**Verified how:** +5 queue tests (MTN callback enqueues reconcile / nothing when
+terminal; status change enqueues DeliverWebhook; DeliverWebhook signs+POSTs via
+Http::fake; poll command enqueues jobs). **Live on Redis:** enqueued a settlement
+job (`queues:settlement`=1), ran one `queue:work` pass → job DONE → bank payout
+`succeeded`, USD balance drawn down, reservation released.
+
+**Next:** open PR → main. Then: real provider/BaaS/watcher/rates + liquidity partner
+behind the seams; a payout webhook to replace the BaaS poll; per-corridor currency
+allow-list on the MTN driver.
+
+**Blocked / not done (by design):** provider integrations still stubbed/sandboxed;
+prod needs `horizon` + `schedule:run` under a process supervisor.
+
+---
+
 ## 2026-08-08 — Concurrency hardening: Postgres + row-locked reservations
 
 **State:** On `feat/concurrency-reservations` (off `main`). `php artisan test` →
