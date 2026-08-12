@@ -4,42 +4,33 @@ namespace App\Console\Commands;
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Jobs\ReconcileTransaction;
 use App\Models\Transaction;
-use App\Services\Transactions\TransactionReconciler;
 use Illuminate\Console\Command;
 
 /**
- * Reconciliation safety net. Callbacks can be missed; this polls the provider
- * for every still-open transaction and settles the ones that have resolved.
- * Schedule it every minute (see routes/console.php).
+ * Reconciliation safety net for mobile-money transactions. Callbacks can be
+ * missed; this enqueues a reconcile job for every still-open collection/payout
+ * so a worker settles the ones that have resolved. Schedule it every minute.
  */
 class PollPendingTransactions extends Command
 {
-    protected $signature = 'psp:poll-pending {--limit=200 : max transactions to poll per run}';
+    protected $signature = 'psp:poll-pending {--limit=500 : max transactions to enqueue per run}';
 
-    protected $description = 'Poll open transactions against their provider and settle resolved ones';
+    protected $description = 'Enqueue reconcile jobs for open mobile-money transactions';
 
-    public function handle(TransactionReconciler $reconciler): int
+    public function handle(): int
     {
         $open = Transaction::whereIn('status', [
             TransactionStatus::Pending->value,
             TransactionStatus::Processing->value,
         ])
-            ->where('type', '!=', TransactionType::CryptoDeposit->value) // crypto has its own poller
-            ->orderBy('created_at')->limit((int) $this->option('limit'))->get();
+            ->whereIn('type', [TransactionType::Collection->value, TransactionType::Payout->value])
+            ->orderBy('created_at')->limit((int) $this->option('limit'))->pluck('id');
 
-        $settled = 0;
+        $open->each(fn (string $id) => ReconcileTransaction::dispatch($id));
 
-        foreach ($open as $transaction) {
-            $after = $reconciler->poll($transaction);
-
-            if ($after->status->isTerminal()) {
-                $settled++;
-                $this->line("  {$transaction->id} → <info>{$after->status->value}</info>");
-            }
-        }
-
-        $this->info("Polled {$open->count()} open transaction(s); {$settled} reached a terminal state.");
+        $this->info("Enqueued {$open->count()} reconcile job(s).");
 
         return self::SUCCESS;
     }

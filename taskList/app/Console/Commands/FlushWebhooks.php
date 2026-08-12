@@ -2,32 +2,26 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\DeliverWebhook;
 use App\Models\WebhookDelivery;
-use App\Services\Webhooks\WebhookDispatcher;
 use Illuminate\Console\Command;
 
 class FlushWebhooks extends Command
 {
-    protected $signature = 'webhooks:flush {--limit=200}';
+    protected $signature = 'webhooks:flush {--limit=500}';
 
-    protected $description = 'Retry pending merchant webhook deliveries that are due';
+    protected $description = 'Re-enqueue pending merchant webhook deliveries that are due for retry';
 
-    public function handle(WebhookDispatcher $dispatcher): int
+    public function handle(): int
     {
         $due = WebhookDelivery::where('status', 'pending')
             ->where(fn ($q) => $q->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()))
             ->limit((int) $this->option('limit'))
-            ->get();
+            ->pluck('id');
 
-        $delivered = 0;
+        $due->each(fn (string $id) => DeliverWebhook::dispatch($id));
 
-        foreach ($due as $delivery) {
-            if ($dispatcher->attempt($delivery)) {
-                $delivered++;
-            }
-        }
-
-        $this->info("Attempted {$due->count()} webhook(s); {$delivered} delivered.");
+        $this->info("Re-enqueued {$due->count()} due webhook(s).");
 
         return self::SUCCESS;
     }

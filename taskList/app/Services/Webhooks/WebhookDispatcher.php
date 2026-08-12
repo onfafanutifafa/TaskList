@@ -2,6 +2,7 @@
 
 namespace App\Services\Webhooks;
 
+use App\Jobs\DeliverWebhook;
 use App\Models\Transaction;
 use App\Models\WebhookDelivery;
 use App\Support\TransactionPayload;
@@ -13,7 +14,8 @@ use Throwable;
  * Delivers signed status webhooks to merchants. Every payload carries an
  * `X-Node-Signature: t=<ts>,v1=<hmac>` header so the merchant can verify
  * authenticity with their webhook secret (constant-time compare on their side).
- * A failed delivery is left `pending` with a back-off for `webhooks:flush`.
+ * Delivery runs on the `webhooks` queue; failures back off in the DB for
+ * `webhooks:flush` to re-enqueue.
  */
 class WebhookDispatcher
 {
@@ -38,7 +40,9 @@ class WebhookDispatcher
             'status' => 'pending',
         ]);
 
-        $this->attempt($delivery);
+        // Off the request path — the actual HTTP POST happens on a worker.
+        // after_commit is on, so this only fires once the creating txn commits.
+        DeliverWebhook::dispatch($delivery->id);
 
         return $delivery;
     }

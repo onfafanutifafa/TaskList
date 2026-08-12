@@ -13,3 +13,6 @@ Schedule::command('bank:poll-payouts')->everyMinute()->withoutOverlapping();
 
 // Retry merchant webhook deliveries that failed and are now due.
 Schedule::command('webhooks:flush')->everyMinute()->withoutOverlapping();
+
+// Horizon queue metrics for the dashboard.
+Schedule::command('horizon:snapshot')->everyFiveMinutes();

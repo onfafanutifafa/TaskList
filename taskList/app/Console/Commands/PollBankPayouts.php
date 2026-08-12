@@ -4,35 +4,29 @@ namespace App\Console\Commands;
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Jobs\ReconcileTransaction;
 use App\Models\Transaction;
-use App\Services\Transactions\BankPayoutService;
 use Illuminate\Console\Command;
 
 /**
- * Reconciliation safety net for outbound bank payouts: polls the banking partner
- * for every still-open payout and settles the ones that have resolved.
+ * Safety net for outbound bank payouts: enqueues a reconcile job for every still-
+ * open payout so a worker polls the banking partner and settles resolved ones.
  */
 class PollBankPayouts extends Command
 {
-    protected $signature = 'bank:poll-payouts {--limit=200}';
+    protected $signature = 'bank:poll-payouts {--limit=500}';
 
-    protected $description = 'Poll open bank payouts against the banking partner and settle resolved ones';
+    protected $description = 'Enqueue reconcile jobs for open bank payouts';
 
-    public function handle(BankPayoutService $payouts): int
+    public function handle(): int
     {
         $open = Transaction::where('type', TransactionType::BankPayout->value)
             ->whereIn('status', [TransactionStatus::Pending->value, TransactionStatus::Processing->value])
-            ->orderBy('created_at')->limit((int) $this->option('limit'))->get();
+            ->orderBy('created_at')->limit((int) $this->option('limit'))->pluck('id');
 
-        $settled = 0;
+        $open->each(fn (string $id) => ReconcileTransaction::dispatch($id));
 
-        foreach ($open as $transaction) {
-            if ($payouts->poll($transaction)->status->isTerminal()) {
-                $settled++;
-            }
-        }
-
-        $this->info("Polled {$open->count()} open bank payout(s); {$settled} settled.");
+        $this->info("Enqueued {$open->count()} bank-payout reconcile job(s).");
 
         return self::SUCCESS;
     }

@@ -198,6 +198,22 @@ restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read
 
 Requests over the scope get `403`; per-key rate limit is 120 req/min.
 
+## Queues & Horizon
+
+Settlement (provider polling) and webhook delivery run on Redis-backed queues, so
+inbound callbacks return immediately and slow work happens on workers.
+
+```bash
+docker compose up -d redis      # Redis on :6379 (see docker-compose.yml)
+# .env: QUEUE_CONNECTION=redis (default in .env.example)
+php artisan horizon             # start the worker supervisor
+```
+
+Dashboard: `http://127.0.0.1:8000/horizon`. Outside `local`, access is gated —
+add your email to `HORIZON_DASHBOARD_EMAILS` (comma-separated). Queues, in priority:
+`settlement` → `webhooks` → `default`. In production run `horizon` under a process
+supervisor (systemd/supervisord) and `php artisan schedule:run` every minute.
+
 ## Running on Postgres (production parity)
 
 SQLite is fine for dev/tests, but the balance reservations use row locking
