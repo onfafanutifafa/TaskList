@@ -70,6 +70,14 @@ money over mobile-money rails, plus **receive stablecoin deposits** — all with
    authenticated merchant. Cross-merchant access returns **404**, never 403
    (don't leak existence).
 
+12. **Screen the entity before moving money; never send raw MSISDNs.**
+    Collections and payouts call `MasenuClient::assertAllowed($msisdn, $context)`
+    before creating anything; a block throws `FraudBlockedException` → `422 fraud_blocked`
+    and nothing is reserved or persisted. The entity is **edge-hashed** with the
+    consortium pepper before it leaves the box (Masenu only ever sees a hash).
+    Disabled by default (`MASENU_ENABLED`); on a Masenu error it fails open/closed per
+    `fail_open`. Test/local without a running Masenu via `app(MasenuClient::class)->force(...)`.
+
 11. **Slow work goes on a queue; enqueue after commit; jobs stay idempotent.**
     Provider status polls (`ReconcileTransaction`, queue `settlement`) and merchant
     webhook POSTs (`DeliverWebhook`, queue `webhooks`) never run in the request —
@@ -105,6 +113,7 @@ app/
   Services/Ledger/                LedgerService, AccountResolver, JournalLeg   (double-entry)
   Services/Transactions/          Collection/Payout/CryptoDeposit services, BalanceService, TransactionReconciler
   Services/Fx/                    FxService (quote + convert), rate providers (config/fake) + manager
+  Services/Fraud/                 MasenuClient (assertAllowed/assess), RiskDecision — consortium fraud screen
   Services/Webhooks/              WebhookDispatcher (signed, retrying)
   Jobs/                           ReconcileTransaction (queue: settlement), DeliverWebhook (queue: webhooks)
   Providers/MobileMoney/

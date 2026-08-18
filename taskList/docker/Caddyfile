@@ -1,0 +1,13 @@
+{
+	frankenphp
+	admin off
+	# TLS is terminated by the platform (Render) / not needed locally; we bind a
+	# plain port via $SERVER_NAME, so disable Caddy's automatic HTTPS.
+	auto_https off
+}
+
+{$SERVER_NAME::8080} {
+	root * /app/public
+	encode zstd br gzip
+	php_server
+}

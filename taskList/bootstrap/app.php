@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\FraudBlockedException;
 use App\Exceptions\ProviderException;
 use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnforceIdempotency;
@@ -51,6 +52,20 @@ return Application::configure(basePath: dirname(__DIR__))
                     'type' => 'validation_error',
                     'message' => 'The request failed validation.',
                     'fields' => $e->errors(),
+                ],
+            ], 422);
+        });
+
+        $exceptions->render(function (FraudBlockedException $e, Request $request) {
+            if (! ($request->is('v1/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'error' => [
+                    'type' => 'fraud_blocked',
+                    'message' => 'This transaction was blocked by fraud screening.',
+                    'risk' => $e->decision->toArray(),
                 ],
             ], 422);
         });

@@ -21,6 +21,10 @@ truth for every unit of money moved.
   (`SELECT ... FOR UPDATE` on Postgres), so concurrent spenders can't oversell.
 - **Queued (Horizon):** provider settlement and webhook delivery run on Redis
   queues off the request path; run workers with `php artisan horizon`.
+- **Fraud screening:** collections/payouts are screened against the Masenu
+  consortium API before money moves (entity edge-hashed; raw MSISDNs never sent).
+- **Deployable:** one Docker image (web + Horizon worker); Render blueprint +
+  local `docker compose --profile app up` — see [DEPLOY.md](DEPLOY.md).
 
 > Node is the software layer. Moving **real** money also needs per-country
 > licensing, PCI/KYC/AML, and live provider contracts — build/test on sandboxes.

@@ -1,0 +1,113 @@
+# Render Blueprint for Node PSP — https://render.com/docs/blueprint-spec
+# Deploys the app in taskList/ as a web service + Horizon worker, backed by
+# managed Postgres and Redis. Docker build context is taskList/ (rootDir).
+#
+# APP_KEY, APP_URL, HORIZON_DASHBOARD_EMAILS and the MTN keys are marked
+# `sync: false` — set them in the Render dashboard (never in git).
+# Generate APP_KEY locally with:  php artisan key:generate --show
+
+databases:
+  - name: node-psp-db
+    plan: free            # upgrade before production; free PG expires
+    databaseName: node_psp
+    user: node
+
+services:
+  - type: redis
+    name: node-psp-redis
+    plan: free
+    maxmemoryPolicy: noeviction   # never drop queued jobs
+    ipAllowList: []               # internal only
+
+  - type: web
+    name: node-psp-web
+    runtime: docker
+    plan: starter
+    rootDir: taskList
+    dockerfilePath: Dockerfile
+    healthCheckPath: /up
+    preDeployCommand: php artisan migrate --force
+    envVars:
+      - fromGroup: node-psp-config
+      - key: DB_URL
+        fromDatabase:
+          name: node-psp-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: node-psp-redis
+          property: connectionString
+      - key: APP_URL
+        sync: false
+
+  - type: worker
+    name: node-psp-worker
+    runtime: docker
+    plan: starter
+    rootDir: taskList
+    dockerfilePath: Dockerfile
+    dockerCommand: horizon
+    envVars:
+      - fromGroup: node-psp-config
+      - key: DB_URL
+        fromDatabase:
+          name: node-psp-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: node-psp-redis
+          property: connectionString
+
+envVarGroups:
+  - name: node-psp-config
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_NAME
+        value: "Node PSP"
+      - key: APP_KEY
+        sync: false           # php artisan key:generate --show
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: HORIZON_DASHBOARD_EMAILS
+        sync: false
+      # PSP knobs (safe defaults; override as needed)
+      - key: PSP_DEFAULT_CURRENCY
+        value: GHS
+      - key: PSP_FEE_BPS
+        value: "150"
+      - key: MTN_MOMO_BASE_URL
+        value: https://sandbox.momodeveloper.mtn.com
+      - key: MTN_MOMO_ENVIRONMENT
+        value: sandbox
+      - key: MTN_MOMO_CURRENCY
+        value: EUR
+      # Secrets — set in the dashboard, keep out of git:
+      - key: MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY
+        sync: false
+      - key: MTN_MOMO_COLLECTION_API_USER
+        sync: false
+      - key: MTN_MOMO_COLLECTION_API_KEY
+        sync: false
+      - key: MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY
+        sync: false
+      - key: MTN_MOMO_DISBURSEMENT_API_USER
+        sync: false
+      - key: MTN_MOMO_DISBURSEMENT_API_KEY
+        sync: false
+      - key: PSP_CRYPTO_WATCHER_SECRET
+        sync: false
+      - key: PSP_BANKING_WEBHOOK_SECRET
+        sync: false

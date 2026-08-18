@@ -8,6 +8,7 @@ use App\Models\Merchant;
 use App\Models\Transaction;
 use App\Providers\MobileMoney\Contracts\MoneyRequest;
 use App\Providers\MobileMoney\ProviderManager;
+use App\Services\Fraud\MasenuClient;
 use App\Support\Money;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -16,6 +17,7 @@ class CollectionService
     public function __construct(
         private readonly ProviderManager $providers,
         private readonly TransactionReconciler $reconciler,
+        private readonly MasenuClient $masenu,
     ) {}
 
     /**
@@ -28,6 +30,13 @@ class CollectionService
         $currency = strtoupper($data['currency']);
         $amount = new Money($data['amount'], $currency);
         $fee = $amount->feeAtBps(config('psp.fee_bps'));
+
+        // Cross-network fraud screen the payer before pulling funds.
+        $this->masenu->assertAllowed($data['phone'], [
+            'channel' => 'collection',
+            'amount_minor' => $amount->minor,
+            'currency' => $currency,
+        ]);
 
         if ($merchant->transactions()->where('reference', $data['reference'])->exists()) {
             throw new ConflictHttpException("A transaction with reference [{$data['reference']}] already exists.");
