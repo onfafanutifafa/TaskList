@@ -198,6 +198,37 @@ restricted key is limited. Scopes: `collections:write/read`, `payouts:write/read
 
 Requests over the scope get `403`; per-key rate limit is 120 req/min.
 
+## Wiring the real MTN MoMo sandbox
+
+Node ships pointed at the MTN sandbox (`sandbox.momodeveloper.mtn.com`). To make
+real HTTPS calls against it:
+
+1. **Get subscription keys** (the only manual step — needs your MTN account):
+   sign up at https://momodeveloper.mtn.com, subscribe to the **Collection** and
+   **Disbursement** products, and copy each product's **Primary Key**.
+2. Put them in `.env`:
+   ```env
+   MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY=<collection primary key>
+   MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY=<disbursement primary key>
+   ```
+3. **Mint the API user + key** for each product (writes them back into `.env`):
+   ```bash
+   php artisan momo:provision-sandbox --write
+   ```
+4. **Fire a real request-to-pay** and watch it settle:
+   ```bash
+   php artisan momo:test-collection --amount=1000        # EUR 10.00 in sandbox
+   ```
+   Sandbox uses EUR and magic payer numbers (e.g. `46733123453`); a normal number
+   returns `SUCCESSFUL`. This talks to the provider directly — no ledger, no real money.
+
+Once that passes, `POST /v1/collections` with `network=mtn` runs the same rail, and
+the queued reconciler settles it into the ledger.
+
+> **Production** is the same code with `MTN_MOMO_BASE_URL=https://proxy.momoapi.mtn.com`,
+> `MTN_MOMO_ENVIRONMENT=<your target>`, live subscription keys, and an API user/key
+> issued through MTN's onboarding — plus the licensing/KYC/settlement agreements.
+
 ## Queues & Horizon
 
 Settlement (provider polling) and webhook delivery run on Redis-backed queues, so
