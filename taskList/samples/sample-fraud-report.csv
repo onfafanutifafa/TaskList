@@ -1,0 +1,5 @@
+Name,Phone,Ghana Card,Bank Account,Location,Fraud Type,Notes
+Kwame Mensah,0559000911,GHA-200555666-1,1234567890,Kumasi,social_engineering,"Vishing — posed as MoMo support, drained victim wallet"
+Ama Boateng,0244123456,GHA-731900021-4,9988776655,Accra,sim_swap,SIM swap then took over the account within 20 min
+Yaw Owusu,0201888777,,5544332211,Takoradi,mule_account,Cash-out mule for 3 confirmed cases
+Efua Sarpong,0270654321,GHA-455120987-2,,Tema,agent_fraud,"Rogue agent, fake reversal scam"
