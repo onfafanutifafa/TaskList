@@ -65,32 +65,24 @@
 @endsection
 
 @section('scripts')
-  <script>
-    // ─── EDGE HASHING — in the browser. Same normalize + HMAC-SHA256 as the PSP
-    //     backend (MasenuClient) and the SDKs. (Demo: pepper is server-secret in prod.)
+  <script type="module">
+    // ─── EDGE HASHING — imported from the vendored Adoor SDK (one source of truth
+    //     shared with the platform, PHP SDK, and Python SDK). The self-test asserts
+    //     the pinned parity vectors in the console on load. (Demo: pepper is a
+    //     server-side member secret in prod, never exposed in a page.)
+    import { normalize, hashIdentifier } from '/vendor/adoor-hashing.js';
+    import '/vendor/adoor-selftest.js';
+
     const CONSORTIUM_PEPPER = @json(config('psp.fraud.pepper') ?? 'dev-only-pepper-not-for-production');
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
     let lastPhone = '';
-
-    function normalize(phone) {
-      let d = String(phone).replace(/\D/g, '');
-      if (d.length === 10 && d.startsWith('0')) d = '233' + d.slice(1);   // Ghana local → E.164
-      return d;
-    }
-    async function edgeHash(phone) {
-      const enc = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', enc.encode(CONSORTIUM_PEPPER),
-        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(normalize(phone)));
-      return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
-    }
 
     async function doHash() {
       const phone = document.getElementById('phone').value.trim();
       if (!phone) return;
       lastPhone = phone;
-      document.getElementById('nm').textContent = normalize(phone);
-      document.getElementById('hx').textContent = await edgeHash(phone);
+      document.getElementById('nm').textContent = normalize('msisdn', phone);
+      document.getElementById('hx').textContent = await hashIdentifier('msisdn', phone, CONSORTIUM_PEPPER);
       document.getElementById('hashOut').hidden = false;
       document.getElementById('netOut').hidden = true;
     }

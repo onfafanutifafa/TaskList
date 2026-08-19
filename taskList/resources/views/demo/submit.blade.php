@@ -126,7 +126,13 @@
 
 @section('scripts')
   <script src="/vendor/xlsx.full.min.js"></script>
-  <script>
+  <script type="module">
+    // Edge hashing imported from the vendored Adoor SDK — one source of truth
+    // shared with the platform + PHP/Python SDKs. The self-test asserts the pinned
+    // parity vectors in the console on load, so any drift is caught immediately.
+    import { hashIdentifier } from '/vendor/adoor-hashing.js';
+    import '/vendor/adoor-selftest.js';
+
     const CONSORTIUM_PEPPER = @json(config('psp.fraud.pepper') ?? 'dev-only-pepper-not-for-production');
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
 
@@ -166,26 +172,6 @@
       return { role: 'ignore', header: h };   // unrecognised → left out entirely
     }
 
-    // ── Edge hashing — same normalize + HMAC-SHA256 as MasenuClient + the SDKs.
-    function normalize(kind, value) {
-      let v = String(value).trim();
-      if (['msisdn','momo_wallet','bank_account'].includes(kind)) {
-        let d = v.replace(/\D/g, '');
-        if (kind === 'msisdn' && d.length === 10 && d.startsWith('0')) d = '233' + d.slice(1);
-        return d;
-      }
-      if (['email','social_handle'].includes(kind)) return v.toLowerCase().replace(/^@+/, '');
-      if (kind === 'url') return v.toLowerCase().replace(/\/+$/, '');
-      if (['ghana_card','passport','tin'].includes(kind)) return v.replace(/[\s\-]/g, '').toUpperCase();
-      return v.toLowerCase();
-    }
-    async function edgeHash(kind, value) {
-      const enc = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', enc.encode(CONSORTIUM_PEPPER),
-        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(normalize(kind, value)));
-      return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
-    }
     function mask(value) {
       const s = String(value);
       if (s.length <= 4) return '•'.repeat(s.length);
@@ -226,10 +212,11 @@
         const ids = [], previews = [];
         let fraud_type = defaultType, narrative = '';
         for (let i = 0; i < cls.length; i++) {
-          const c = cls[i], cell = row[i];
-          if (cell === '' || cell == null) continue;
+          const c = cls[i];
+          const cell = row[i] == null ? '' : String(row[i]).trim();   // SDK normalize() is string-only
+          if (cell === '') continue;
           if (c.role === 'kind') {
-            const value_hash = await edgeHash(c.kind, cell);
+            const value_hash = await hashIdentifier(c.kind, cell, CONSORTIUM_PEPPER);
             ids.push({ kind: c.kind, value_hash, role: defaultRole });
             previews.push({ kind: c.kind, mask: mask(cell), value_hash, local: false });
             hashCount++;
@@ -271,7 +258,10 @@
       reader.onload = e => {
         const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+        // raw:false → every cell comes back as its *formatted text*, so a phone
+        // like 0559000911 keeps its leading zero (numeric coercion would drop it
+        // and the hash would never join). Also guarantees strings, not numbers.
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false, defval: '' });
         handleRows(rows);
       };
       reader.readAsArrayBuffer(file);

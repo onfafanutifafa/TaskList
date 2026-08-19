@@ -2,6 +2,7 @@
 
 namespace App\Services\Fraud;
 
+use Adoor\Hashing;
 use App\Enums\RiskAction;
 use App\Exceptions\FraudBlockedException;
 use Illuminate\Support\Facades\Http;
@@ -80,18 +81,15 @@ class MasenuClient
 
     /**
      * Edge hash (h1): HMAC-SHA256(consortium_pepper, normalize(entity)). Masenu
-     * only ever sees the hash. Normalization must match the platform exactly:
-     * digits only, and a Ghana local MSISDN (0XXXXXXXXX) is canonicalised to
-     * E.164 (233XXXXXXXXX) before hashing, or the digests won't join.
+     * only ever sees the hash. Delegated to the official SDK (`masenu/adoor`) so
+     * normalization has ONE source of truth shared with the platform and the
+     * Python/TS SDKs — the digests only join if they match byte-for-byte, so we
+     * never hand-roll a second copy that can drift. The entity here is always an
+     * MSISDN; the SDK canonicalises a Ghana local number (0XXXXXXXXX) to E.164.
      */
     private function edgeHash(string $entity): string
     {
-        $digits = preg_replace('/\D/', '', $entity) ?? '';
-        if (strlen($digits) === 10 && str_starts_with($digits, '0')) {
-            $digits = '233'.substr($digits, 1);
-        }
-
-        return hash_hmac('sha256', $digits, (string) config('psp.fraud.pepper'));
+        return Hashing::hashIdentifier('msisdn', $entity, (string) config('psp.fraud.pepper'));
     }
 
     /** Map Masenu's response (risk_band / recommended_action / risk_score) to a decision. */
