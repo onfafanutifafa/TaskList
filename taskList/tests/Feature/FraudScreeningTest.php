@@ -98,9 +98,10 @@ class FraudScreeningTest extends TestCase
 
         $this->assertTrue($decision->isBlocked());
         Http::assertSent(function ($request) {
-            // raw MSISDN never sent; a hash is
+            // raw MSISDN never sent; only a hash, in the identifiers[] schema Masenu expects
             return $request->url() === 'https://masenu.test/v1/lookups'
-                && $request['value_hashed'] === hash_hmac('sha256', '233240000000', 'pep')
+                && $request['identifiers'][0]['kind'] === 'msisdn'
+                && $request['identifiers'][0]['value_hash'] === hash_hmac('sha256', '233240000000', 'pep')
                 && ! str_contains(json_encode($request->data()), '233240000000');
         });
     }

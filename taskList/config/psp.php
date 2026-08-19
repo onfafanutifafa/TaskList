@@ -194,24 +194,4 @@ return [
         'max_attempts' => (int) env('PSP_WEBHOOK_MAX_ATTEMPTS', 6),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Masenu — cross-network fraud screening
-    |--------------------------------------------------------------------------
-    | Before a payout leaves, the recipient MSISDN is screened against the
-    | Masenu fraud-intelligence network. Only a one-way HMAC of the number ever
-    | leaves this process (hash-at-edge). `block_on` is a comma list of Masenu
-    | decisions that hard-stop a payout with 422; everything else proceeds.
-    | Fails OPEN if Masenu is disabled or unreachable.
-    */
-    'masenu' => [
-        'enabled' => (bool) env('MASENU_ENABLED', true),
-        'base_url' => env('MASENU_BASE_URL', 'http://localhost:8000'),
-        'api_key' => env('MASENU_API_KEY'),
-        'consortium_pepper' => env('MASENU_CONSORTIUM_PEPPER', 'dev-only-pepper-not-for-production'),
-        'pepper_v' => (int) env('MASENU_PEPPER_V', 1),
-        'timeout' => (float) env('MASENU_TIMEOUT', 3),
-        'block_on' => env('MASENU_BLOCK_ON', 'block'),
-    ],
-
 ];

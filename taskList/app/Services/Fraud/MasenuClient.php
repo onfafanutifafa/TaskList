@@ -61,10 +61,11 @@ class MasenuClient
                 ->timeout((int) config('psp.fraud.timeout', 4))
                 ->acceptJson()
                 ->post('/v1/lookups', [
-                    'type' => 'msisdn',
-                    'value_hashed' => $this->edgeHash($entity),
-                    'pepper_v' => (int) config('psp.fraud.pepper_v', 1),
-                    'context' => $context,
+                    'identifiers' => [[
+                        'kind' => 'msisdn',
+                        'value_hash' => $this->edgeHash($entity),
+                        'pepper_v' => (int) config('psp.fraud.pepper_v', 1),
+                    ]],
                 ]);
 
             if (! $response->successful()) {
@@ -77,10 +78,20 @@ class MasenuClient
         }
     }
 
-    /** Edge hash (h1): raw entity + consortium pepper, so Masenu only ever sees a hash. */
+    /**
+     * Edge hash (h1): HMAC-SHA256(consortium_pepper, normalize(entity)). Masenu
+     * only ever sees the hash. Normalization must match the platform exactly:
+     * digits only, and a Ghana local MSISDN (0XXXXXXXXX) is canonicalised to
+     * E.164 (233XXXXXXXXX) before hashing, or the digests won't join.
+     */
     private function edgeHash(string $entity): string
     {
-        return hash_hmac('sha256', $entity, (string) config('psp.fraud.pepper'));
+        $digits = preg_replace('/\D/', '', $entity) ?? '';
+        if (strlen($digits) === 10 && str_starts_with($digits, '0')) {
+            $digits = '233'.substr($digits, 1);
+        }
+
+        return hash_hmac('sha256', $digits, (string) config('psp.fraud.pepper'));
     }
 
     /** Map Masenu's response (risk_band / recommended_action / risk_score) to a decision. */
