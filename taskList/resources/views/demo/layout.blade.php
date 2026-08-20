@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>@yield('title', 'AllPay')</title>
+  <title>@yield('title', config('psp.name'))</title>
   <style>
     :root { --bg:#0d1117; --card:#161b25; --line:#232a36; --ink:#e8eaf0; --muted:#9aa4b2; --gold:#c9a227;
             --green:#2ea043; --red:#e5484d; --amber:#d29922; }
@@ -55,7 +55,7 @@
 </head>
 <body>
   <nav>
-    <a class="brand" href="/demo/hash"><span class="dot"></span>AllPay</a>
+    <a class="brand" href="/demo/hash"><span class="dot"></span>{{ config('psp.name') }}</a>
     <a class="tab @yield('tab_submit')" href="/demo/submit">Fraud submission</a>
     <a class="tab @yield('tab_demo')" href="/demo/hash">Live demo</a>
     <span class="spacer"></span>

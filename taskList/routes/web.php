@@ -19,7 +19,10 @@ Route::get('/', fn () => response()->json([
 | the `local` environment on purpose: in production the pepper is a member secret
 | and the hashing runs server-side (MasenuClient) or via an SDK — never in a page.
 */
-if (app()->environment('local')) {
+// 'allpay' / 'sikapay' are demo environments used to run two branded PSP
+// instances side by side (same code, different PSP_NAME + Masenu member key,
+// shared consortium pepper) for the cross-institution demo.
+if (app()->environment(['local', 'allpay', 'sikapay'])) {
     Route::redirect('/demo', '/demo/hash');
     Route::view('/demo/hash', 'demo.hash');       // Live demo (lookup + block/allow)
     Route::view('/demo/submit', 'demo.submit');   // Fraud submission (edge-hash a spreadsheet)

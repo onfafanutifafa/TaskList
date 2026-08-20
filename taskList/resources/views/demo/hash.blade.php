@@ -1,6 +1,6 @@
 @extends('demo.layout')
 
-@section('title', 'Live demo — edge hash + network check · AllPay')
+@section('title', 'Live demo — edge hash + network check · '.config('psp.name'))
 @section('tab_demo', 'active')
 
 @section('style')

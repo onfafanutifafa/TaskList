@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# local two-PSP demo env files (secrets)
+.env.allpay
+.env.sikapay
