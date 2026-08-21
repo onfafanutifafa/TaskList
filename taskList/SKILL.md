@@ -165,6 +165,32 @@ load/understand before touching a module. Pairs with [CLAUDE.md](CLAUDE.md)
   a non-idempotent job (settlement must no-op on terminal); forgetting `after_commit`
   and racing the DB write; not scoping `WithoutOverlapping` per transaction id.
 
+## 9d. Fraud screening (`app/Services/Fraud/*`)
+
+- `MasenuClient::assertAllowed($msisdn, $context)` runs before a collection/payout
+  is created; a block throws `FraudBlockedException` → `422 fraud_blocked`, and
+  nothing is reserved or written. `assess()` returns the `RiskDecision` if you want
+  the verdict without throwing.
+- Calls Masenu's `/v1/lookups` with the entity **edge-hashed** (`hash_hmac(pepper)`)
+  + `pepper_v` — raw MSISDNs never leave the box. Maps `recommended_action`/`risk_score`
+  to allow/review/block (`block_on`, `block_threshold`). Fails open/closed per `fail_open`.
+- Config `psp.fraud` ← `MASENU_*` env. **Disabled by default** (`MASENU_ENABLED=false`);
+  run Masenu Pro locally (`MASENU_BASE_URL`) to test for real, or
+  `app(MasenuClient::class)->force(RiskDecision::block(...))` in tests/demos.
+- **Traps:** sending a raw phone number; screening after creating the transaction
+  (screen first); failing closed by accident (default is open) — decide per corridor.
+
+## 9e. Deployment (`Dockerfile`, `render.yaml`, `DEPLOY.md`)
+
+- One image (FrankenPHP + PHP 8.4), two roles via the entrypoint: web (default) and
+  `horizon`. Build context is `taskList/`. See [DEPLOY.md](DEPLOY.md).
+- Local dry-run of the exact Render image: `docker compose --profile app up --build`
+  (Postgres + Redis + app on :8088 + worker). `render.yaml` deploys web + worker +
+  managed Postgres/Redis; `DB_URL`/`REDIS_URL` injected; migrate via preDeploy.
+- **Traps:** baking `.env` or dev-time `bootstrap/cache/*.php` into the image (both
+  are in `.dockerignore` — the cached manifest would drag in dev-only providers like
+  Pail under `--no-dev`); forgetting the worker + a `schedule:run` cron in prod.
+
 ## 10. Reconciliation & ops (`app/Console/Commands/*`)
 
 - `psp:poll-pending` (scheduled every minute) settles mobile-money transactions

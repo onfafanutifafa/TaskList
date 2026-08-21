@@ -22,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CryptoProviderManager::class);
         $this->app->singleton(RateProviderManager::class);
         $this->app->singleton(BankingProviderManager::class);
+        // Singleton so a forced decision (tests/local) is seen everywhere.
+        $this->app->singleton(\App\Services\Fraud\MasenuClient::class);
     }
 
     public function boot(): void

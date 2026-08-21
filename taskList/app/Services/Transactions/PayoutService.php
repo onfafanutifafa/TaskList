@@ -8,6 +8,7 @@ use App\Models\Merchant;
 use App\Models\Transaction;
 use App\Providers\MobileMoney\Contracts\MoneyRequest;
 use App\Providers\MobileMoney\ProviderManager;
+use App\Services\Fraud\MasenuClient;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -18,6 +19,7 @@ class PayoutService
         private readonly ProviderManager $providers,
         private readonly BalanceService $balances,
         private readonly TransactionReconciler $reconciler,
+        private readonly MasenuClient $masenu,
     ) {}
 
     /**
@@ -30,6 +32,10 @@ class PayoutService
     {
         $currency = strtoupper($data['currency']);
         $amount = new Money($data['amount'], $currency);
+
+        // Cross-network fraud screen the recipient before any money moves.
+        // Throws FraudBlockedException (422) when the Masenu network says block.
+        $this->masenu->assertAllowed($data['phone']);
 
         if ($merchant->transactions()->where('reference', $data['reference'])->exists()) {
             throw new ConflictHttpException("A transaction with reference [{$data['reference']}] already exists.");

@@ -1,11 +1,12 @@
-# Local Postgres for Node PSP. Production uses Postgres so that the row-locked
-# balance reservations (SELECT ... FOR UPDATE) actually serialise concurrent
-# spends — SQLite is fine for tests but does not model row-level locking.
+# Local infra + optional full-stack run for Node PSP.
 #
-#   docker compose up -d
-#   # then in .env:  DB_CONNECTION=pgsql  DB_HOST=127.0.0.1  DB_PORT=5432
-#   #                DB_DATABASE=node_psp DB_USERNAME=node   DB_PASSWORD=secret
-#   php artisan migrate
+#   docker compose up -d                 # just Postgres + Redis (app runs on host)
+#   docker compose --profile app up      # the same Docker image Render runs: app + worker
+#
+# Infra-only usage, with the app on the host, needs in .env:
+#   DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432
+#   DB_DATABASE=node_psp DB_USERNAME=node DB_PASSWORD=secret
+#   QUEUE_CONNECTION=redis
 services:
   postgres:
     image: postgres:16-alpine
@@ -35,6 +36,54 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # The production image (FrankenPHP), for a true local dry-run of what Render deploys.
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: ${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: node_psp
+      DB_USERNAME: node
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "8088:8080"   # 8080 is a common local conflict (Jenkins, etc.)
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["horizon"]
+    environment:
+      APP_ENV: local
+      APP_KEY: ${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: node_psp
+      DB_USERNAME: node
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
 volumes:
   node_pgdata:

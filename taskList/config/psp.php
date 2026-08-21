@@ -164,6 +164,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Fraud screening (Masenu consortium API)
+    |--------------------------------------------------------------------------
+    | Before moving money, Node asks Masenu for a real-time risk decision on the
+    | entity (payer/recipient MSISDN). The entity is edge-hashed with the
+    | consortium pepper before it leaves the box (two-layer h1→h2), so raw phone
+    | numbers are never sent. Disabled by default; on a Masenu error we fail open
+    | or closed per `fail_open`. Run Masenu Pro locally (MASENU_BASE_URL) to test.
+    */
+    'fraud' => [
+        'enabled' => (bool) env('MASENU_ENABLED', false),
+        'fail_open' => (bool) env('MASENU_FAIL_OPEN', true),
+        'block_on' => env('MASENU_BLOCK_ON', 'block'),          // recommended_action that blocks
+        'block_threshold' => (int) env('MASENU_BLOCK_THRESHOLD', 80),
+        'base_url' => env('MASENU_BASE_URL', 'http://localhost:8000'),
+        'api_key' => env('MASENU_API_KEY'),
+        'pepper' => env('MASENU_CONSORTIUM_PEPPER'),
+        'pepper_v' => (int) env('MASENU_PEPPER_V', 1),
+        'timeout' => (int) env('MASENU_TIMEOUT', 4),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Webhooks (outbound, to merchants)
     |--------------------------------------------------------------------------
     */

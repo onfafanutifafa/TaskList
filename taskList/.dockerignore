@@ -1,0 +1,31 @@
+# Never bake secrets or local state into the image.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.github
+
+vendor
+node_modules
+
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+database/*.sqlite
+database/*.sqlite-journal
+
+# Dev-time cached manifests (reference dev-only providers like laravel/pail);
+# Laravel regenerates them at runtime against the --no-dev vendor.
+bootstrap/cache/*.php
+
+tests
+.phpunit.result.cache
+phpunit.xml
+
+docker-compose.yml
+README.md
+HANDOFF.md
+*.md

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d08d819ee1a964ce72805083cb29d8ae",
+    "content-hash": "91e86b3035fb50d266bd04f08cdab17d",
     "packages": [
         {
             "name": "brick/math",
@@ -2154,6 +2154,59 @@
                 }
             ],
             "time": "2025-12-07T16:03:21+00:00"
+        },
+        {
+            "name": "masenu/adoor",
+            "version": "dev-feat/live-demo-seed",
+            "dist": {
+                "type": "path",
+                "url": "../../masenu-pro/sdk/php",
+                "reference": "6633f0f5ee439ef09d8fdf07f384a17cb91fec49"
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "php": ">=8.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5 || ^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Adoor\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Adoor\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ],
+                "parity": [
+                    "php tests/parity.php"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Official PHP client for the Adoor (Masenu) fraud-intelligence consortium — lookup() before money moves, report() confirmed fraud. Raw identifiers are hashed locally; only one-way digests leave your infrastructure.",
+            "homepage": "https://masenu.app",
+            "keywords": [
+                "adoor",
+                "consortium",
+                "fraud",
+                "fraud-prevention",
+                "masenu",
+                "mobile-money"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "monolog/monolog",
@@ -8498,7 +8551,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "masenu/adoor": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

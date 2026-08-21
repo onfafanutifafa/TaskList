@@ -5,6 +5,42 @@ top. Keep entries short: what changed, what's verified, what's next, what's bloc
 
 ---
 
+## 2026-08-18 — Deployment (Docker + Render) + Masenu fraud screening
+
+**State:** On `feat/deploy-and-fraud` (off `main`). `php artisan test` → **57 passed
+(163 assertions)**. Docker image built AND run locally (web + worker verified).
+
+**Done (verified):**
+- **Deployment.** One image (`Dockerfile`, FrankenPHP + PHP 8.4), two roles via
+  `docker/entrypoint.sh` (web default / `horizon` / `artisan …`). `docker/Caddyfile`
+  binds `$PORT`. `.dockerignore` excludes `.env` and dev-time `bootstrap/cache/*.php`
+  (else `--no-dev` boot fails on `Laravel\Pail\PailServiceProvider`). `render.yaml`
+  blueprint = web + worker + managed Postgres + Redis (`DB_URL`/`REDIS_URL` injected,
+  migrate via preDeploy). `docker-compose.yml` gained `app`+`worker` under the `app`
+  profile for a local dry-run. [DEPLOY.md](DEPLOY.md) written.
+- **Verified locally:** `docker compose --profile app up` → `/up` 200 on **:8088**
+  (8080 collides with local Jenkins), created a merchant, `GET /v1/balance` 200,
+  `POST /v1/virtual-accounts` 201, unauth 401; worker logged "Horizon started".
+- **Fraud screening (Masenu).** `MasenuClient::assertAllowed($msisdn,$context)` on
+  collections + payouts before anything is created; block → `FraudBlockedException`
+  → `422 fraud_blocked`, nothing reserved/written. Entity **edge-hashed** with the
+  consortium pepper (raw MSISDN never sent) → Masenu `/v1/lookups`; maps
+  `recommended_action`/`risk_score`. Config `psp.fraud` ← `MASENU_*`. Disabled by
+  default; `force()` hook for tests/local. Singleton-bound.
+
+**Verified how:** +5 fraud tests (blocked payer → 422 + no txn, allowed, disabled
+default, blocked recipient no-reserve, real-response mapping + hash assertion) and a
+full local container run. Full suite 57 green.
+
+**Next:** open PR → main. Then: run Masenu Pro locally (`MASENU_BASE_URL`) for a real
+cross-service demo; real MTN sandbox creds (PR #7 tooling); FX-on-payout; liquidity
+partner. Consider upgrading web server settings / plans before real traffic.
+
+**Blocked / not done (by design):** provider/BaaS/rates still stubbed/sandboxed;
+Render free PG/Redis expire (upgrade for prod); fraud fails **open** by default.
+
+---
+
 ## 2026-08-12 — Settlement + webhook queues (Horizon)
 
 **State:** On `feat/horizon-queue` (off `main`). `php artisan test` → **52 passed
